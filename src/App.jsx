@@ -1,45 +1,72 @@
 import { useState, useEffect } from 'react'
 import {
-  DndContext,
-  PointerSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-  DragOverlay,
+  DndContext, PointerSensor, KeyboardSensor,
+  useSensor, useSensors, DragOverlay,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import toast from 'react-hot-toast'
 import useRosterStore from './store/rosterStore'
-import { getEmployeeColor } from './utils/constants'
-import Header from './components/Header'
-import RosterGrid from './components/RosterGrid'
-import EmployeePanel from './components/EmployeePanel'
-import ImportModal from './components/ImportModal'
-import AIPanel from './components/AIPanel'
-import RulesModal from './components/RulesModal'
-import SettingsModal from './components/SettingsModal'
-import ChatImportModal from './components/ChatImportModal'
+import { getEmployeeColor, EMPLOYEE_COLORS } from './utils/constants'
+import { autoSchedule } from './utils/rosterEngine'
+import { exportToExcel } from './utils/excelExport'
 import { applyKnownPreferences } from './utils/applyPreferences'
 
+import Sidebar         from './components/Sidebar'
+import TopBar          from './components/TopBar'
+import RosterGrid      from './components/RosterGrid'
+import EmployeePanel   from './components/EmployeePanel'
+import ImportModal     from './components/ImportModal'
+import AIPanel         from './components/AIPanel'
+import RulesModal      from './components/RulesModal'
+import SettingsModal   from './components/SettingsModal'
+import ChatImportModal from './components/ChatImportModal'
+
 export default function App() {
-  const { assignEmployee, employees } = useRosterStore()
+  const { assignEmployee, employees, weekStart, numDays, setAssignments } = useRosterStore()
 
-  // Apply employee-specific preferences and rules once employees are loaded
-  useEffect(() => {
-    if (employees.length > 0) applyKnownPreferences(useRosterStore)
-  }, [employees.length])
-
+  const [activeNav,    setActiveNav]    = useState('roster')
   const [showImport,   setShowImport]   = useState(false)
   const [showAI,       setShowAI]       = useState(false)
   const [showRules,    setShowRules]    = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showChat,     setShowChat]     = useState(false)
+  const [showEmpPanel, setShowEmpPanel] = useState(true)
   const [activeEmp,    setActiveEmp]    = useState(null)
+
+  useEffect(() => {
+    if (employees.length > 0) applyKnownPreferences(useRosterStore)
+  }, [employees.length])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
+
+  function handleNav(id) {
+    setActiveNav(id)
+    if (id === 'import')    { setShowImport(true);   return }
+    if (id === 'chat')      { setShowChat(true);      return }
+    if (id === 'rules')     { setShowRules(true);     return }
+    if (id === 'ai')        { setShowAI(true);        return }
+    if (id === 'employees') { setShowEmpPanel(v => !v); return }
+  }
+
+  function handleAutoSchedule() {
+    if (!employees.length) return toast.error('Add employees first')
+    const result = autoSchedule(employees, numDays)
+    setAssignments(result)
+    toast.success('Roster auto-scheduled')
+  }
+
+  function handleExport() {
+    try {
+      const { assignments } = useRosterStore.getState()
+      exportToExcel(weekStart, numDays, assignments, employees)
+      toast.success('Excel exported')
+    } catch (e) {
+      toast.error(e.message)
+    }
+  }
 
   function onDragStart({ active }) {
     if (active.id.startsWith('employee-')) {
@@ -53,52 +80,58 @@ export default function App() {
     if (!over || !active.id.startsWith('employee-')) return
     const empId = active.id.replace('employee-', '')
     if (over.id.startsWith('cell-')) {
-      const rest = over.id.slice(5)                    // remove "cell-"
-      const dash = rest.indexOf('-')
-      const dayIdx   = parseInt(rest.slice(0, dash), 10)
+      const rest     = over.id.slice(5)
+      const dash     = rest.indexOf('-')
+      const dayIdx   = parseInt(rest.slice(0, dash))
       const shiftKey = rest.slice(dash + 1)
       assignEmployee(dayIdx, shiftKey, empId)
-      const name = employees.find(e => e.id === empId)?.name || 'Employee'
-      toast.success(`${name} assigned`, { duration: 1500 })
     }
   }
 
   return (
     <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-      <div className="flex flex-col h-screen bg-primary-50">
+      <div className="flex h-screen overflow-hidden" style={{ background: '#0E0F11' }}>
 
-        <Header
-          onOpenImport={() => setShowImport(true)}
-          onOpenAI={() => setShowAI(true)}
-          onOpenRules={() => setShowRules(true)}
+        {/* Left sidebar */}
+        <Sidebar
+          active={activeNav}
+          onNav={handleNav}
+          onAutoSchedule={handleAutoSchedule}
+          onExport={handleExport}
           onOpenSettings={() => setShowSettings(true)}
-          onOpenChat={() => setShowChat(true)}
         />
 
-        <div className="flex flex-1 overflow-hidden">
-          <EmployeePanel />
+        {/* Main content */}
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <TopBar />
 
-          <main className="flex-1 overflow-hidden flex flex-col p-4 gap-3">
-            <RosterGrid />
+          <div className="flex flex-1 overflow-hidden">
+            {showEmpPanel && <EmployeePanel />}
 
-            {/* Footer hint */}
-            <p className="text-[11px] font-semibold text-primary-400 text-center pb-1 tracking-wide">
-              Drag employees from the panel · Click × on a badge to remove · AI powered by Ollama (local)
-            </p>
-          </main>
+            <main className="flex-1 overflow-auto p-4" style={{ background: '#0E0F11' }}>
+              <RosterGrid />
+              <p
+                className="text-center text-xs mt-3 pb-1"
+                style={{ color: '#3A3D45' }}
+              >
+                Drag employees onto cells · Click × to remove · Auto-Schedule fills all slots
+              </p>
+            </main>
+          </div>
         </div>
       </div>
 
       {/* Drag overlay */}
-      <DragOverlay dropAnimation={{ duration: 150 }}>
+      <DragOverlay dropAnimation={{ duration: 120 }}>
         {activeEmp && <DragChip emp={activeEmp} employees={employees} />}
       </DragOverlay>
 
-      {showImport   && <ImportModal   onClose={() => setShowImport(false)}   />}
-      {showAI       && <AIPanel       onClose={() => setShowAI(false)}       />}
-      {showRules    && <RulesModal    onClose={() => setShowRules(false)}    />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
-      {showChat     && <ChatImportModal onClose={() => setShowChat(false)} />}
+      {/* Modals */}
+      {showImport   && <ImportModal     onClose={() => { setShowImport(false);   setActiveNav('roster') }} />}
+      {showChat     && <ChatImportModal onClose={() => { setShowChat(false);     setActiveNav('roster') }} />}
+      {showRules    && <RulesModal      onClose={() => { setShowRules(false);    setActiveNav('roster') }} />}
+      {showAI       && <AIPanel         onClose={() => { setShowAI(false);       setActiveNav('roster') }} />}
+      {showSettings && <SettingsModal   onClose={() => setShowSettings(false)} />}
     </DndContext>
   )
 }
@@ -107,10 +140,16 @@ function DragChip({ emp, employees }) {
   const color = getEmployeeColor(emp.id, employees)
   return (
     <div
-      className={`badge text-sm px-3 py-2 cursor-grabbing font-bold ${color.bg} ${color.text} ${color.border}`}
-      style={{ transform: 'rotate(2deg)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-grabbing"
+      style={{
+        background: '#26292F',
+        color: '#F0EEE9',
+        border: `0.5px solid ${color}`,
+        borderLeft: `2px solid ${color}`,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+        transform: 'rotate(1.5deg)',
+      }}
     >
-      <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: color.dot }} />
       {emp.name}
     </div>
   )

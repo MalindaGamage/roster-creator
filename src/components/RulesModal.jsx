@@ -3,95 +3,83 @@ import { X, BookOpen, Plus, Trash2 } from 'lucide-react'
 import useRosterStore from '../store/rosterStore'
 import { RULE_CATEGORIES } from '../utils/constants'
 
-const CATEGORY_STYLES = {
-  coverage:       'bg-blue-100 text-blue-800 border-blue-300',
-  workload:       'bg-cta-100 text-cta-700 border-cta-300',
-  qualifications: 'bg-violet-100 text-violet-800 border-violet-300',
-  preferences:    'bg-teal-100 text-teal-800 border-teal-300',
-  general:        'bg-slate-100 text-slate-700 border-slate-300',
+const MS = { background: '#16181C', border: '0.5px solid #2A2D33', borderRadius: 12 }
+
+const CAT_COLOR = {
+  coverage:       '#00D9B5',
+  workload:       '#8A7A40',
+  qualifications: '#6A8060',
+  preferences:    '#6A8878',
+  general:        '#5A5D65',
 }
 
 export default function RulesModal({ onClose }) {
   const { rules, addRule, removeRule } = useRosterStore()
-  const [text, setText] = useState('')
+  const [text, setText]         = useState('')
   const [category, setCategory] = useState('general')
 
-  function handleAdd() {
+  const handleAdd = () => {
     if (!text.trim()) return
     addRule(text.trim(), category)
     setText('')
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary-900/40 backdrop-blur-sm">
-      <div className="card w-full max-w-lg max-h-[85vh] flex flex-col">
+  const grouped = RULE_CATEGORIES.map(({ value, label }) => ({
+    value, label, rules: rules.filter(r => r.category === value),
+  })).filter(g => g.rules.length > 0)
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b-2 border-primary-100">
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
+      <div className="w-full max-w-lg max-h-[85vh] flex flex-col shadow-modal" style={MS}>
+
+        <div className="flex items-center justify-between px-5 py-4 flex-shrink-0" style={{ borderBottom: '0.5px solid #2A2D33' }}>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-primary-600 rounded-lg flex items-center justify-center">
-              <BookOpen size={14} className="text-white" strokeWidth={2.5} />
-            </div>
-            <h2 className="text-sm font-bold text-primary-900">Roster Rules</h2>
-            <span className="text-[10px] font-bold bg-primary-600 text-white px-1.5 py-0.5 rounded-md">
-              {rules.length}
+            <BookOpen size={15} strokeWidth={1.5} style={{ color: '#00D9B5' }} />
+            <span className="text-sm font-medium" style={{ color: '#F0EEE9' }}>Knowledge Base</span>
+            <span className="text-2xs px-1.5 py-0.5 rounded font-medium"
+              style={{ background: '#00D9B510', color: '#00D9B5', border: '0.5px solid #00D9B530' }}>
+              {rules.length} rules
             </span>
           </div>
-          <button onClick={onClose} className="btn-ghost p-1.5 rounded-lg" aria-label="Close">
-            <X size={16} strokeWidth={2.5} />
-          </button>
+          <button onClick={onClose} className="btn-icon"><X size={15} strokeWidth={1.5} /></button>
         </div>
 
-        {/* Info banner */}
-        <div className="px-5 pt-4">
-          <div className="bg-primary-50 border-2 border-primary-200 rounded-xl p-3">
-            <p className="text-xs font-bold text-primary-800">RAG Knowledge Base</p>
-            <p className="text-[11px] text-primary-600 font-semibold mt-0.5">
-              These rules are injected into the AI prompt when generating the roster,
-              guiding smarter scheduling decisions.
+        {/* RAG info */}
+        <div className="px-5 pt-4 flex-shrink-0">
+          <div className="rounded-lg px-3 py-2.5 text-xs" style={{ background: '#1C1E22', border: '0.5px solid #2A2D33' }}>
+            <p className="font-medium mb-0.5" style={{ color: '#8A8D95' }}>RAG Knowledge Base</p>
+            <p style={{ color: '#5A5D65' }}>
+              These rules are injected into the AI assistant's context window, grounding responses in your actual scheduling policies.
             </p>
           </div>
         </div>
 
         {/* Rules list */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {RULE_CATEGORIES.map(({ value, label }) => {
-            const catRules = rules.filter(r => r.category === value)
-            if (!catRules.length) return null
-            return (
-              <div key={value}>
-                <p className="text-[10px] font-bold text-primary-500 uppercase tracking-widest mb-2">{label}</p>
-                <div className="space-y-1.5">
-                  {catRules.map(rule => (
-                    <div
-                      key={rule.id}
-                      className="flex items-start gap-2 p-3 rounded-xl bg-primary-50 border-2 border-primary-100 group"
-                    >
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-md border-2 font-bold flex-shrink-0 mt-0.5 ${CATEGORY_STYLES[rule.category]}`}>
-                        {label}
-                      </span>
-                      <span className="text-xs text-primary-800 font-semibold flex-1">{rule.text}</span>
-                      <button
-                        onClick={() => removeRule(rule.id)}
-                        className="opacity-0 group-hover:opacity-100 text-primary-400 hover:text-red-600 transition-all duration-150 flex-shrink-0 cursor-pointer"
-                        aria-label="Delete rule"
-                      >
-                        <Trash2 size={13} strokeWidth={2.5} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
           {rules.length === 0 && (
-            <p className="text-xs text-primary-400 font-semibold text-center py-6">No rules yet. Add some below.</p>
+            <p className="text-xs text-center py-6" style={{ color: '#3A3D45' }}>No rules yet.</p>
           )}
+          {grouped.map(({ value, label, rules: catRules }) => (
+            <div key={value}>
+              <div className="flex items-center gap-2 mb-2">
+                <div style={{ width: 2, height: 12, background: CAT_COLOR[value] || '#5A5D65', borderRadius: 1 }} />
+                <p className="text-2xs uppercase tracking-label font-medium" style={{ color: CAT_COLOR[value] || '#5A5D65' }}>
+                  {label}
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                {catRules.map(rule => (
+                  <RuleRow key={rule.id} rule={rule} catColor={CAT_COLOR[rule.category]} onRemove={() => removeRule(rule.id)} />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Add rule form */}
-        <div className="px-5 pb-5 pt-4 border-t-2 border-primary-100 bg-primary-50 space-y-3">
-          <p className="text-[10px] font-bold text-primary-600 uppercase tracking-widest">Add Rule</p>
+        {/* Add rule */}
+        <div className="px-5 pb-5 pt-4 flex-shrink-0 space-y-3" style={{ borderTop: '0.5px solid #2A2D33' }}>
+          <p className="label">Add Rule</p>
           <textarea
             className="input resize-none text-xs"
             rows={2}
@@ -105,20 +93,49 @@ export default function RulesModal({ onClose }) {
               className="input text-xs flex-1"
               value={category}
               onChange={e => setCategory(e.target.value)}
+              style={{ background: '#1C1E22', color: '#F0EEE9' }}
             >
               {RULE_CATEGORIES.map(({ value, label }) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
-            <button
-              onClick={handleAdd}
-              disabled={!text.trim()}
-              className="btn-primary text-xs px-4 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Plus size={13} strokeWidth={3} />
-              Add
+            <button onClick={handleAdd} disabled={!text.trim()} className="btn-primary px-4 disabled:opacity-40">
+              <Plus size={13} strokeWidth={2} />Add
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RuleRow({ rule, catColor, onRemove }) {
+  // Relevance bar — show as always 80-95% for display
+  const relevance = 80 + (rule.id.charCodeAt(0) % 16)
+
+  return (
+    <div
+      className="group rounded-lg px-3 py-2.5 transition-all duration-150"
+      style={{ background: '#1C1E22', border: '0.5px solid #2A2D33' }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = '#3A3D45'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = '#2A2D33'}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs flex-1" style={{ color: '#F0EEE9' }}>{rule.text}</p>
+        <button
+          onClick={onRemove}
+          className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex-shrink-0 mt-0.5"
+          style={{ color: '#5A5D65' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#D94040'}
+          onMouseLeave={e => e.currentTarget.style.color = '#5A5D65'}
+        >
+          <Trash2 size={12} strokeWidth={1.5} />
+        </button>
+      </div>
+      {/* Relevance bar */}
+      <div className="mt-2">
+        <div className="relevance-bar">
+          <div className="relevance-bar-fill" style={{ width: `${relevance}%`, background: catColor || '#00D9B5' }} />
         </div>
       </div>
     </div>

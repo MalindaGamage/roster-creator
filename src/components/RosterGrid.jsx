@@ -1,81 +1,63 @@
 import { useDroppable } from '@dnd-kit/core'
 import { format, addDays, parseISO } from 'date-fns'
-import { X, Moon, AlertCircle } from 'lucide-react'
+import { X, Moon } from 'lucide-react'
 import clsx from 'clsx'
 import useRosterStore from '../store/rosterStore'
-import { SHIFTS, DAYS_SHORT, SHIFT_STYLES, getEmployeeColor } from '../utils/constants'
+import { SHIFTS, DAYS_SHORT, SHIFT_BAR_COLOR, getEmployeeColor } from '../utils/constants'
 
 export default function RosterGrid() {
   const { weekStart, numDays, employees } = useRosterStore()
   const start = parseISO(weekStart)
-
-  const days = Array.from({ length: numDays }, (_, i) => ({
-    idx:  i,
-    date: addDays(start, i),
+  const days  = Array.from({ length: numDays }, (_, i) => ({
+    idx: i, date: addDays(start, i),
   }))
-
   const today = format(new Date(), 'yyyy-MM-dd')
 
   return (
-    <div className="overflow-x-auto flex-1">
-      <div style={{ minWidth: `${180 + numDays * 130}px` }}>
+    <div className="overflow-x-auto">
+      <div style={{ minWidth: numDays * 130 + 160 }}>
 
-        {/* ── Day header ─────────────────────────────────────────────── */}
+        {/* Day header */}
         <div
-          className="grid"
-          style={{ gridTemplateColumns: `180px repeat(${numDays}, 1fr)` }}
+          className="grid mb-0.5"
+          style={{ gridTemplateColumns: `160px repeat(${numDays}, 1fr)` }}
         >
-          {/* Corner */}
-          <div className="bg-primary-900 rounded-tl-xl px-4 py-3 flex items-end pb-3">
-            <span className="text-[10px] font-bold text-primary-300 uppercase tracking-widest">
-              Shift
-            </span>
+          <div
+            className="px-4 py-2.5 text-xs font-medium uppercase tracking-label flex items-end"
+            style={{ color: '#5A5D65' }}
+          >
+            Shift
           </div>
-
           {days.map(({ idx, date }) => {
-            const dateStr = format(date, 'yyyy-MM-dd')
-            const isToday = dateStr === today
+            const ds      = format(date, 'yyyy-MM-dd')
+            const isToday = ds === today
             return (
               <div
                 key={idx}
-                className={clsx(
-                  'py-3 text-center border-l-2 border-primary-700',
-                  isToday ? 'bg-cta-500' : 'bg-primary-900',
-                  idx === numDays - 1 && 'rounded-tr-xl'
-                )}
+                className="text-center py-2.5"
+                style={{ borderBottom: `0.5px solid ${isToday ? '#00D9B5' : '#2A2D33'}` }}
               >
-                <p className={clsx(
-                  'text-[10px] font-bold uppercase tracking-widest',
-                  isToday ? 'text-white' : 'text-primary-400'
-                )}>
+                <p
+                  className="text-xs font-medium uppercase tracking-label"
+                  style={{ color: isToday ? '#00D9B5' : '#5A5D65' }}
+                >
                   {DAYS_SHORT[idx]}
                 </p>
-                <p className={clsx(
-                  'text-xl font-bold mt-0.5',
-                  isToday ? 'text-white' : 'text-white'
-                )}>
+                <p
+                  className="text-base font-semibold mt-0.5"
+                  style={{ color: isToday ? '#F0EEE9' : '#8A8D95' }}
+                >
                   {format(date, 'd')}
-                </p>
-                <p className={clsx(
-                  'text-[10px] font-semibold',
-                  isToday ? 'text-orange-100' : 'text-primary-500'
-                )}>
-                  {format(date, 'MMM')}
                 </p>
               </div>
             )
           })}
         </div>
 
-        {/* ── Shift rows ─────────────────────────────────────────────── */}
-        <div className="border-2 border-t-0 border-primary-200 rounded-b-xl overflow-hidden divide-y-2 divide-primary-100">
-          {SHIFTS.map((shift, i) => (
-            <ShiftRow
-              key={shift.key}
-              shift={shift}
-              days={days}
-              isLast={i === SHIFTS.length - 1}
-            />
+        {/* Shift rows */}
+        <div className="space-y-0.5">
+          {SHIFTS.map(shift => (
+            <ShiftRow key={shift.key} shift={shift} days={days} employees={employees} />
           ))}
         </div>
       </div>
@@ -83,27 +65,45 @@ export default function RosterGrid() {
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────── */
-
-function ShiftRow({ shift, days }) {
-  const styles = SHIFT_STYLES[shift.key]
-  const { employees } = useRosterStore()
+function ShiftRow({ shift, days, employees }) {
+  const barColor = SHIFT_BAR_COLOR[shift.key]
 
   return (
     <div
       className="grid"
-      style={{ gridTemplateColumns: `180px repeat(${days.length}, 1fr)` }}
+      style={{
+        gridTemplateColumns: `160px repeat(${days.length}, 1fr)`,
+        borderRadius: 8,
+        overflow: 'hidden',
+        background: '#16181C',
+        border: '0.5px solid #2A2D33',
+      }}
     >
-      {/* Shift label column */}
-      <div className={clsx('flex flex-col justify-center gap-1 px-4 py-4 border-r-2', styles.row, styles.border)}>
-        <div className="flex items-center gap-2">
-          <span className={clsx('w-2.5 h-2.5 rounded-sm flex-shrink-0', styles.dot)} />
-          <span className={clsx('text-sm font-bold', styles.text)}>{shift.label}</span>
+      {/* Shift label with left colored bar */}
+      <div
+        className="flex flex-col justify-center px-4 py-3 gap-0.5"
+        style={{ borderLeft: `2px solid ${barColor}`, borderRight: '0.5px solid #2A2D33' }}
+      >
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-medium" style={{ color: '#F0EEE9' }}>
+            {shift.label}
+          </span>
           {shift.isNight && (
-            <Moon size={11} className="text-primary-400" strokeWidth={2} />
+            <Moon size={11} strokeWidth={1.5} style={{ color: '#5A5D65' }} />
+          )}
+          {shift.isOnsite && (
+            <span
+              className="text-2xs font-medium px-1 rounded"
+              style={{ background: '#1C1E22', color: barColor, border: `0.5px solid ${barColor}30` }}
+            >
+              onsite
+            </span>
           )}
         </div>
-        <span className="text-[11px] text-primary-500 font-semibold pl-4">{shift.time}</span>
+        <span className="text-xs" style={{ color: '#5A5D65' }}>{shift.time}</span>
+        <span className="text-2xs font-medium" style={{ color: barColor }}>
+          {shift.hours}h
+        </span>
       </div>
 
       {/* Day cells */}
@@ -113,17 +113,14 @@ function ShiftRow({ shift, days }) {
           dayIdx={idx}
           shiftKey={shift.key}
           employees={employees}
-          styles={styles}
-          isLast={idx === days.length - 1}
+          isLastCol={idx === days.length - 1}
         />
       ))}
     </div>
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────── */
-
-function RosterCell({ dayIdx, shiftKey, employees, styles, isLast }) {
+function RosterCell({ dayIdx, shiftKey, employees, isLastCol }) {
   const { getCellIds, unassignEmployee } = useRosterStore()
   const assignedIds = getCellIds(dayIdx, shiftKey)
 
@@ -135,28 +132,22 @@ function RosterCell({ dayIdx, shiftKey, employees, styles, isLast }) {
   return (
     <div
       ref={setNodeRef}
-      className={clsx(
-        'min-h-[80px] p-2 transition-colors duration-150 ease-out',
-        'border-l-2',
-        styles.row,
-        styles.border,
-        isOver
-          ? 'bg-primary-100 border-primary-500 ring-2 ring-inset ring-primary-400'
-          : styles.hover,
-        isLast && ''
-      )}
+      className={clsx('min-h-[72px] p-2 transition-all duration-150', isOver && 'drop-active')}
+      style={{
+        borderLeft: '0.5px solid #2A2D33',
+        borderRight: isLastCol ? 'none' : '0.5px solid #2A2D3310',
+      }}
     >
-      {/* Drop hint */}
       {isOver && assignedIds.length === 0 && (
-        <div className="flex items-center gap-1.5 text-primary-600 text-xs font-semibold h-full justify-center">
-          <span className="w-4 h-4 rounded-full border-2 border-dashed border-primary-400 flex items-center justify-center">+</span>
+        <div
+          className="flex items-center justify-center h-full text-xs font-medium"
+          style={{ color: '#00D9B5' }}
+        >
           Drop here
         </div>
       )}
-
-      {/* Assigned employee chips */}
       <div className="flex flex-wrap gap-1">
-        {assignedIds.map((empId) => (
+        {assignedIds.map(empId => (
           <EmployeeChip
             key={empId}
             empId={empId}
@@ -169,31 +160,31 @@ function RosterCell({ dayIdx, shiftKey, employees, styles, isLast }) {
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────── */
-
 function EmployeeChip({ empId, employees, onRemove }) {
-  const emp = employees.find(e => e.id === empId)
-  if (!emp) return (
-    <span className="badge bg-red-50 text-red-600 border-red-300 text-[10px]">
-      <AlertCircle size={9} /> Unknown
-    </span>
-  )
-
+  const emp   = employees.find(e => e.id === empId)
+  if (!emp) return null
   const color = getEmployeeColor(empId, employees)
 
   return (
-    <span className={clsx('badge group cursor-default', color.bg, color.text, color.border)}>
-      <span
-        className="w-1.5 h-1.5 rounded-sm flex-shrink-0"
-        style={{ backgroundColor: color.dot }}
-      />
-      <span className="max-w-[88px] truncate text-[11px] font-semibold">{emp.name}</span>
+    <span
+      className="group inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium cursor-default transition-all duration-150"
+      style={{
+        background: '#26292F',
+        color: '#F0EEE9',
+        borderLeft: `2px solid ${color}`,
+        border: '0.5px solid #3A3D45',
+        borderLeftWidth: 2,
+        borderLeftColor: color,
+      }}
+    >
+      <span className="max-w-[80px] truncate">{emp.name}</span>
       <button
         onClick={onRemove}
-        className="ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 hover:text-red-600 cursor-pointer"
-        aria-label={`Remove ${emp.name}`}
+        className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 hover:text-red-400"
+        style={{ color: '#5A5D65' }}
+        aria-label="Remove"
       >
-        <X size={10} strokeWidth={3} />
+        <X size={9} strokeWidth={2.5} />
       </button>
     </span>
   )

@@ -1,112 +1,73 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, MessageSquare, Send, RefreshCw, Check, AlertTriangle, Bot, Trash2 } from 'lucide-react'
+import { X, Terminal, Send, RefreshCw, Check, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
-import toast from 'react-hot-toast'
 import { format, parseISO, addDays } from 'date-fns'
+import toast from 'react-hot-toast'
 import useRosterStore from '../store/rosterStore'
-import { ollamaChat, pingOllama, listModels } from '../utils/ollama'
+import { ollamaChat, pingOllama } from '../utils/ollama'
 import { SHIFTS, SHIFT_HOURS } from '../utils/constants'
-import { calcEmployeeHours } from '../utils/rosterEngine'
+import { calcEmployeeHours, calcEmployeeNights } from '../utils/rosterEngine'
 
-const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const DAY_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 
-const EXAMPLE_QUESTIONS = [
-  'Who can cover Shift B on Friday if Shihara is sick?',
-  'Which employees are under 32 hours this week?',
-  'Who is available for an extra shift on Sunday?',
+const SUGGESTIONS = [
+  'Who has hours left for an extra shift?',
+  'Who can cover Shift B if Shihara is sick on Friday?',
+  'Which employees are under 32 hours?',
   'Suggest a swap if Uminda wants Saturday off',
 ]
 
 export default function AIPanel({ onClose }) {
   const { employees, rules, assignments, weekStart, numDays, ollamaModel, addChatMessage, clearChat, chatHistory } = useRosterStore()
+  const [input, setInput]     = useState('')
+  const [sending, setSending] = useState(false)
+  const [online, setOnline]   = useState(null)
+  const [stream, setStream]   = useState('')
+  const endRef   = useRef()
+  const inputRef = useRef()
 
-  const [input, setInput]       = useState('')
-  const [sending, setSending]   = useState(false)
-  const [ollamaOk, setOllamaOk] = useState(null)
-  const [streamText, setStream] = useState('')
-  const chatEndRef = useRef()
+  useEffect(() => { pingOllama().then(setOnline) }, [])
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatHistory, stream])
 
-  useEffect(() => { checkOllama() }, [])
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatHistory, streamText])
-
-  async function checkOllama() {
-    setOllamaOk(null)
-    setOllamaOk(await pingOllama())
-  }
-
-  // Build a rich context snapshot for the AI
   const weekLabel = (() => {
     const s = parseISO(weekStart)
     return `${format(s, 'MMM d')} – ${format(addDays(s, numDays - 1), 'MMM d, yyyy')}`
   })()
 
   function buildSystemPrompt() {
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
-    // Employee summary with hours and current assignments
     const empSummary = employees.map(e => {
       const h = calcEmployeeHours(e.id, assignments)
-      const assignedCells = Object.entries(assignments)
+      const n = calcEmployeeNights(e.id, assignments)
+      const cells = Object.entries(assignments)
         .filter(([, ids]) => ids.includes(e.id))
-        .map(([key]) => {
-          const dash = key.indexOf('-')
-          const d    = parseInt(key.slice(0, dash))
-          const sk   = key.slice(dash + 1)
-          return `${dayNames[d]} ${SHIFTS.find(s => s.key === sk)?.label || sk}`
-        })
-      const prefShifts = e.shifts.length ? e.shifts.join(',') : 'Any'
-      const availDays  = e.days.length   ? e.days.map(d => dayNames[d]).join(',') : 'Any'
-      const offDays    = [0,1,2,3,4,5,6].filter(d => !e.days.includes(d)).map(d => dayNames[d])
-
-      return [
-        `${e.name}:`,
-        `  Scheduled ${h}h/week (min 32h, max 45h)`,
-        `  Prefers: ${prefShifts} | Days off: ${offDays.join(',') || 'none'}`,
-        assignedCells.length ? `  Assigned: ${assignedCells.join(', ')}` : '  Not yet assigned',
-      ].join('\n')
+        .map(([k]) => { const dash = k.indexOf('-'); return `${DAY_SHORT[parseInt(k.slice(0, dash))]}-${k.slice(dash + 1)}` })
+      const pref = e.shifts.length ? e.shifts.join(',') : 'any'
+      return `${e.name}: ${h}h ${n}nights prefer=${pref} scheduled=${cells.join(',') || 'none'}`
     }).join('\n')
 
-    const rulesSummary = rules.map(r => `- ${r.text}`).join('\n')
-
-    return `You are a helpful workforce scheduling assistant for a team roster.
-
-WEEK: ${weekLabel}
-SHIFTS:
-  A = Onsite Day  8AM-5PM  (8h)
-  B = Onsite Night 5PM-8AM (15h)  ← overnight
-  C = Remote Early 5AM-1PM (8h)
-  D = Remote Afternoon 1PM-9PM (8h)
-  E = Remote Night 9PM-5AM (8h, needs 2 staff)
-  Backup = On-call (8h)
-
-HOUR LIMITS: min 32h/week, max 45h/week per employee
-
-SCHEDULING RULES:
-${rulesSummary}
-
-CURRENT EMPLOYEE STATUS:
+    return `You are a concise workforce scheduling assistant for week ${weekLabel}.
+Shifts: A=OnSite-Day(8h) B=OnSite-Night(15h) C=Remote-Early(8h) D=Remote-Afternoon(8h) E=Remote-Night(8h,2staff) Backup(8h)
+Hour limits: min 32h max 45h. One shift/day. 2 nights/employee target.
+Rules: ${rules.map(r => r.text).join(' | ')}
+Employee status:
 ${empSummary}
-
-Answer concisely and practically. Suggest real employee names when making recommendations. If asked about availability, check their days-off and hour limits.`
+Answer in 1-3 concise sentences. Use real names.`
   }
 
-  async function sendChat() {
+  async function send() {
     const msg = input.trim()
     if (!msg || sending) return
     setInput('')
     addChatMessage({ role: 'user', content: msg })
-
-    if (!ollamaOk) {
-      addChatMessage({ role: 'assistant', content: '⚠️ Ollama is offline. Start Ollama on your machine to use the chat assistant.' })
+    if (!online) {
+      addChatMessage({ role: 'assistant', content: 'OFFLINE: Ollama is not running. Start Ollama on localhost:11434.' })
       return
     }
-
-    setSending(true)
-    setStream('')
+    setSending(true); setStream('')
     try {
       const messages = [
         { role: 'system', content: buildSystemPrompt() },
-        ...chatHistory.slice(-10).map(m => ({ role: m.role, content: m.content })),
+        ...chatHistory.slice(-8),
         { role: 'user', content: msg },
       ]
       let full = ''
@@ -114,85 +75,93 @@ Answer concisely and practically. Suggest real employee names when making recomm
       addChatMessage({ role: 'assistant', content: full || '(no response)' })
       setStream('')
     } catch (e) {
-      addChatMessage({ role: 'assistant', content: `Error: ${e.message}` })
-    } finally {
-      setSending(false)
-    }
+      addChatMessage({ role: 'assistant', content: `ERROR: ${e.message}` })
+    } finally { setSending(false) }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="flex-1 bg-primary-900/20 backdrop-blur-sm" onClick={onClose} />
+      <div className="flex-1" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }} onClick={onClose} />
 
-      <div className="w-full max-w-md bg-white border-l-2 border-primary-100 flex flex-col h-full">
-
+      <div
+        className="flex flex-col h-full"
+        style={{ width: 420, background: '#0B0C0E', borderLeft: '0.5px solid #2A2D33' }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-primary-900">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-cta-500 rounded-xl flex items-center justify-center flex-shrink-0">
-              <MessageSquare size={15} className="text-white" strokeWidth={2.5} />
-            </div>
+        <div
+          className="flex items-center justify-between px-4 py-3 flex-shrink-0"
+          style={{ borderBottom: '0.5px solid #1C1E22' }}
+        >
+          <div className="flex items-center gap-2">
+            <Terminal size={15} strokeWidth={1.5} style={{ color: '#00D9B5' }} />
             <div>
-              <p className="text-sm font-bold text-white leading-none">Scheduling Assistant</p>
-              <p className="text-[10px] text-primary-400 font-semibold mt-0.5">Ask anything about this week's roster</p>
+              <p className="text-sm font-medium font-mono" style={{ color: '#F0EEE9' }}>
+                <span style={{ color: '#00D9B5' }}>›</span> scheduling_assistant
+              </p>
+              <p className="text-2xs font-mono" style={{ color: '#5A5D65' }}>
+                model: {ollamaModel} · ollama:11434
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <OllamaStatus ok={ollamaOk} onRecheck={checkOllama} />
-            <button onClick={onClose} className="p-1.5 text-primary-400 hover:text-white rounded-lg transition-colors cursor-pointer">
-              <X size={16} strokeWidth={2.5} />
-            </button>
+          <div className="flex items-center gap-2">
+            {online === true  && <span className="text-2xs font-mono px-1.5 py-0.5 rounded" style={{ background: '#00D9B510', color: '#00D9B5', border: '0.5px solid #00D9B530' }}>online</span>}
+            {online === false && <span className="text-2xs font-mono px-1.5 py-0.5 rounded" style={{ background: '#3A1010', color: '#D94040', border: '0.5px solid #D9404030' }}>offline</span>}
+            {online === null  && <span className="text-2xs font-mono" style={{ color: '#5A5D65' }}>checking…</span>}
+            <button onClick={onClose} className="btn-icon"><X size={14} strokeWidth={1.5} /></button>
           </div>
         </div>
 
         {/* Offline notice */}
-        {ollamaOk === false && (
-          <div className="bg-red-50 border-b-2 border-red-200 px-4 py-3">
-            <p className="text-xs font-bold text-red-700">Ollama is not running</p>
-            <p className="text-[11px] text-red-600 font-semibold mt-0.5">
-              Install Ollama → run <code className="bg-red-100 px-1 rounded">ollama pull llama3.2</code> → restart the app.
+        {online === false && (
+          <div className="px-4 py-2 flex-shrink-0" style={{ background: '#130A0A', borderBottom: '0.5px solid #3A1010' }}>
+            <p className="text-xs font-mono" style={{ color: '#D94040' }}>
+              $ ollama pull llama3.2 && ollama serve
             </p>
           </div>
         )}
 
         {/* Chat messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {chatHistory.length === 0 && !streamText && (
-            <EmptyState questions={EXAMPLE_QUESTIONS} onPick={setInput} />
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 font-mono">
+          {chatHistory.length === 0 && !stream && (
+            <EmptyState onPick={setInput} />
           )}
-          {chatHistory.map((msg, i) => <Bubble key={i} msg={msg} />)}
-          {streamText && <Bubble msg={{ role: 'assistant', content: streamText }} streaming />}
-          <div ref={chatEndRef} />
+          {chatHistory.map((msg, i) => <Message key={i} msg={msg} />)}
+          {stream && <Message msg={{ role: 'assistant', content: stream }} streaming />}
+          <div ref={endRef} />
         </div>
 
         {/* Input */}
-        <div className="p-3 border-t-2 border-primary-100 space-y-2">
-          <div className="flex gap-2">
+        <div className="flex-shrink-0 px-4 py-3" style={{ borderTop: '0.5px solid #1C1E22' }}>
+          <div className="flex items-center gap-2">
+            {/* Prompt prefix */}
+            <span className="text-sm font-mono flex-shrink-0" style={{ color: '#00D9B5' }}>›</span>
             <input
-              className="input text-sm flex-1"
-              placeholder="Ask about the roster…"
+              ref={inputRef}
+              className="flex-1 bg-transparent text-sm font-mono outline-none terminal-input"
+              style={{ color: '#F0EEE9', caretColor: '#00D9B5' }}
+              placeholder="ask a question…"
               value={input}
               onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendChat()}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
               disabled={sending}
             />
-            <button
-              onClick={sendChat}
-              disabled={!input.trim() || sending}
-              className="btn-primary px-3 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {sending ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} strokeWidth={2.5} />}
+            <button onClick={send} disabled={!input.trim() || sending} className="btn-icon disabled:opacity-30">
+              {sending
+                ? <RefreshCw size={13} strokeWidth={1.5} className="animate-spin" />
+                : <Send size={13} strokeWidth={1.5} />}
             </button>
           </div>
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] text-primary-400 font-semibold">
-              Powered by Ollama (local) · Model: {ollamaModel}
+          <div className="flex items-center justify-between mt-2">
+            <p className="text-2xs font-mono" style={{ color: '#3A3D45' }}>
+              Week: {weekLabel}
             </p>
-            <button
-              onClick={() => { clearChat(); setStream('') }}
-              className="flex items-center gap-1 text-[10px] text-primary-400 hover:text-primary-600 font-semibold transition-colors cursor-pointer"
+            <button onClick={() => { clearChat(); setStream('') }}
+              className="text-2xs font-mono transition-colors duration-150"
+              style={{ color: '#3A3D45' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#8A8D95'}
+              onMouseLeave={e => e.currentTarget.style.color = '#3A3D45'}
             >
-              <Trash2 size={10} /> Clear
+              clear history
             </button>
           </div>
         </div>
@@ -201,62 +170,53 @@ Answer concisely and practically. Suggest real employee names when making recomm
   )
 }
 
-/* ─── Sub-components ─────────────────────────────────────────────────────── */
-
-function OllamaStatus({ ok, onRecheck }) {
-  return (
-    <button onClick={onRecheck} className="flex items-center gap-1 cursor-pointer" title="Check Ollama connection">
-      {ok === null && <span className="text-[10px] text-primary-400 font-semibold">Checking…</span>}
-      {ok === true  && <span className="flex items-center gap-1 text-[10px] bg-primary-600 text-white px-2 py-0.5 rounded-md font-bold"><Check size={9} strokeWidth={3} /> Online</span>}
-      {ok === false && <span className="flex items-center gap-1 text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-md font-bold"><AlertTriangle size={9} /> Offline</span>}
-      <RefreshCw size={11} className="text-primary-500 hover:text-white transition-colors ml-0.5" />
-    </button>
-  )
-}
-
-function Bubble({ msg, streaming }) {
+function Message({ msg, streaming }) {
   const isUser = msg.role === 'user'
   return (
-    <div className={clsx('flex gap-2', isUser ? 'justify-end' : 'justify-start')}>
-      {!isUser && (
-        <div className="w-6 h-6 bg-primary-600 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-          <Bot size={12} className="text-white" />
+    <div className={clsx('text-xs font-mono', isUser ? 'text-right' : '')}>
+      {isUser ? (
+        <div className="inline-block text-left">
+          <span style={{ color: '#5A5D65' }}>[you] </span>
+          <span style={{ color: '#F0EEE9' }}>{msg.content}</span>
+        </div>
+      ) : (
+        <div>
+          <div className="mb-0.5 text-2xs" style={{ color: '#3A3D45' }}>
+            [ai] ›
+          </div>
+          <div
+            className="rounded-lg px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap"
+            style={{ background: '#16181C', color: '#F0EEE9', border: '0.5px solid #2A2D33' }}
+          >
+            {msg.content}
+            {streaming && <span className="terminal-cursor" />}
+          </div>
         </div>
       )}
-      <div className={clsx(
-        'max-w-[82%] px-3 py-2 rounded-xl text-xs leading-relaxed whitespace-pre-wrap font-medium',
-        isUser
-          ? 'bg-primary-600 text-white rounded-tr-sm'
-          : 'bg-primary-50 text-primary-900 border-2 border-primary-100 rounded-tl-sm',
-        streaming && 'after:content-["▋"] after:animate-pulse after:ml-0.5 after:text-primary-400'
-      )}>
-        {msg.content}
-      </div>
     </div>
   )
 }
 
-function EmptyState({ questions, onPick }) {
+function EmptyState({ onPick }) {
   return (
-    <div className="text-center py-6 px-3">
-      <div className="w-14 h-14 bg-primary-50 border-2 border-primary-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-        <MessageSquare size={24} className="text-primary-400" strokeWidth={2} />
-      </div>
-      <p className="text-sm font-bold text-primary-800">Scheduling Assistant</p>
-      <p className="text-xs text-primary-500 font-semibold mt-1">
-        Ask me anything about this week's roster — availability, swaps, coverage gaps.
+    <div className="py-6">
+      <p className="text-xs font-mono mb-1" style={{ color: '#00D9B5' }}>scheduling_assistant v1.0</p>
+      <p className="text-xs font-mono mb-4" style={{ color: '#3A3D45' }}>
+        # context: employees, hours, assignments, rules loaded
       </p>
-      <div className="mt-5 space-y-2 text-left">
-        {questions.map(q => (
-          <button
-            key={q}
-            onClick={() => onPick(q)}
-            className="w-full text-left text-xs p-2.5 rounded-xl bg-primary-50 border-2 border-primary-100 text-primary-700 font-semibold hover:border-primary-300 hover:bg-primary-100 transition-colors duration-150 cursor-pointer"
-          >
-            {q}
-          </button>
-        ))}
-      </div>
+      <p className="text-2xs font-mono mb-2" style={{ color: '#5A5D65' }}>// suggested queries</p>
+      {SUGGESTIONS.map(q => (
+        <button
+          key={q}
+          onClick={() => onPick(q)}
+          className="block w-full text-left text-xs font-mono mb-1.5 px-2 py-1.5 rounded transition-all duration-150"
+          style={{ color: '#8A8D95', background: '#16181C', border: '0.5px solid #2A2D33' }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#F0EEE9'; e.currentTarget.style.borderColor = '#00D9B530' }}
+          onMouseLeave={e => { e.currentTarget.style.color = '#8A8D95'; e.currentTarget.style.borderColor = '#2A2D33' }}
+        >
+          <span style={{ color: '#00D9B5' }}>›</span> {q}
+        </button>
+      ))}
     </div>
   )
 }

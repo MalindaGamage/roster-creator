@@ -4,30 +4,25 @@ import toast from 'react-hot-toast'
 import useRosterStore from '../store/rosterStore'
 import { parseCSV, fetchSheetCSV, extractSheetId, mapRowsToEmployees } from '../utils/googleSheets'
 
+const MS = { background: '#16181C', border: '0.5px solid #2A2D33', borderRadius: 12 }
 const TABS = [
   { id: 'file',  label: 'Upload CSV',       icon: Upload   },
-  { id: 'url',   label: 'Google Sheets URL', icon: Link     },
-  { id: 'paste', label: 'Paste CSV',         icon: FileText },
+  { id: 'url',   label: 'Google Sheets',    icon: Link     },
+  { id: 'paste', label: 'Paste CSV',        icon: FileText },
 ]
 
 export default function ImportModal({ onClose }) {
   const { importEmployees } = useRosterStore()
-  const [tab, setTab] = useState('file')
+  const [tab, setTab]         = useState('file')
   const [sheetUrl, setSheetUrl] = useState('')
   const [csvText, setCsvText] = useState('')
   const [loading, setLoading] = useState(false)
-  const [parsed, setParsed] = useState(null)
-  const [colMap, setColMap] = useState({ name: '', employeeId: '', shifts: '', days: '', notes: '' })
+  const [parsed, setParsed]   = useState(null)
+  const [colMap, setColMap]   = useState({ name: '', employeeId: '', shifts: '', days: '', notes: '' })
   const [replace, setReplace] = useState(false)
   const fileRef = useRef()
 
-  async function handleFile(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    parseCsvText(await file.text())
-  }
-
-  function parseCsvText(text) {
+  const parseCsvText = text => {
     try {
       const result = parseCSV(text)
       setParsed(result)
@@ -38,12 +33,10 @@ export default function ImportModal({ onClose }) {
         if (!auto.employeeId && /\bid\b|number|code/.test(l)) auto.employeeId = h
         if (!auto.shifts && /shift|preferred/.test(l)) auto.shifts = h
         if (!auto.days && /day|avail/.test(l)) auto.days = h
-        if (!auto.notes && /note|comment|remark/.test(l)) auto.notes = h
+        if (!auto.notes && /note|comment/.test(l)) auto.notes = h
       })
       setColMap(auto)
-    } catch (e) {
-      toast.error('CSV parse error: ' + e.message)
-    }
+    } catch (e) { toast.error(e.message) }
   }
 
   async function handleFetchSheet() {
@@ -53,127 +46,98 @@ export default function ImportModal({ onClose }) {
     try {
       const result = await fetchSheetCSV(id)
       setParsed(result)
-      toast.success(`Loaded ${result.rows.length} rows from Google Sheets`)
-    } catch (e) {
-      toast.error(e.message)
-    } finally { setLoading(false) }
+      toast.success(`Loaded ${result.rows.length} rows`)
+    } catch (e) { toast.error(e.message) }
+    finally { setLoading(false) }
   }
 
   function handleImport() {
-    if (!parsed) return
     if (!colMap.name) return toast.error('Select the Name column')
     try {
-      const employees = mapRowsToEmployees(parsed.rows, colMap)
-      importEmployees(employees, replace)
-      toast.success(`Imported ${employees.length} employees!`)
+      const emps = mapRowsToEmployees(parsed.rows, colMap)
+      importEmployees(emps, replace)
+      toast.success(`Imported ${emps.length} employees`)
       onClose()
-    } catch (e) {
-      toast.error(e.message)
-    }
+    } catch (e) { toast.error(e.message) }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary-900/40 backdrop-blur-sm">
-      <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
+      <div className="w-full max-w-2xl max-h-[88vh] flex flex-col shadow-modal" style={MS}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b-2 border-primary-100">
+        <div className="flex items-center justify-between px-5 py-4 flex-shrink-0" style={{ borderBottom: '0.5px solid #2A2D33' }}>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-primary-600 rounded-lg flex items-center justify-center">
-              <Upload size={14} className="text-white" strokeWidth={2.5} />
-            </div>
-            <h2 className="text-sm font-bold text-primary-900">Import Employees</h2>
+            <Upload size={15} strokeWidth={1.5} style={{ color: '#00D9B5' }} />
+            <span className="text-sm font-medium" style={{ color: '#F0EEE9' }}>Import Employees</span>
           </div>
-          <button onClick={onClose} className="btn-ghost p-1.5 rounded-lg" aria-label="Close">
-            <X size={16} strokeWidth={2.5} />
-          </button>
+          <button onClick={onClose} className="btn-icon"><X size={15} strokeWidth={1.5} /></button>
         </div>
 
-        <div className="overflow-y-auto flex-1 p-5 space-y-5">
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
 
           {/* Google Form guide */}
-          <div className="bg-primary-50 border-2 border-primary-200 rounded-xl p-4">
-            <p className="text-xs font-bold text-primary-800 mb-1">Using Google Forms?</p>
-            <p className="text-[11px] text-primary-700 font-semibold leading-relaxed">
-              Create a Google Form with fields: <strong>Employee Name, Employee ID, Preferred Shifts, Available Days, Notes</strong>.
-              Responses auto-save to Google Sheets — share it ("Anyone with link → View"),
-              then paste the URL below or download as CSV.
+          <div className="rounded-lg p-3 text-xs" style={{ background: '#1C1E22', border: '0.5px solid #2A2D33' }}>
+            <p className="font-medium mb-1" style={{ color: '#00D9B5' }}>Using Google Forms?</p>
+            <p style={{ color: '#8A8D95' }}>
+              Create a form with: <span style={{ color: '#F0EEE9' }}>Employee Name, Employee ID, Preferred Shifts, Available Days, Notes</span>.
+              Responses auto-save to Sheets — share with "Anyone can view", paste URL below.
             </p>
           </div>
 
           {/* Tabs */}
-          <div className="flex border-2 border-primary-200 rounded-xl overflow-hidden">
+          <div className="flex rounded-lg overflow-hidden" style={{ border: '0.5px solid #2A2D33' }}>
             {TABS.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => { setTab(id); setParsed(null) }}
-                className={clsx(
-                  'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold transition-colors duration-150 cursor-pointer',
-                  tab === id
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-white text-primary-600 hover:bg-primary-50'
-                )}
+              <button key={id} onClick={() => { setTab(id); setParsed(null) }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors duration-150"
+                style={{
+                  background: tab === id ? '#00D9B5' : '#1C1E22',
+                  color:      tab === id ? '#0E0F11' : '#8A8D95',
+                  borderRight: id !== 'paste' ? '0.5px solid #2A2D33' : 'none',
+                }}
               >
-                <Icon size={13} strokeWidth={2.5} />
-                {label}
+                <Icon size={13} strokeWidth={1.5} />{label}
               </button>
             ))}
           </div>
 
-          {/* Tab: File upload */}
+          {/* Tab content */}
           {tab === 'file' && (
-            <div>
-              <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={handleFile} />
-              <button
-                onClick={() => fileRef.current.click()}
-                className="w-full border-2 border-dashed border-primary-300 rounded-xl py-12 flex flex-col items-center gap-2 text-primary-400 hover:border-primary-500 hover:text-primary-600 hover:bg-primary-50 transition-all duration-150 cursor-pointer"
+            <>
+              <input type="file" accept=".csv" ref={fileRef} className="hidden"
+                onChange={async e => { if (e.target.files[0]) parseCsvText(await e.target.files[0].text()) }} />
+              <button onClick={() => fileRef.current.click()}
+                className="w-full py-12 flex flex-col items-center gap-2 rounded-xl transition-all duration-150 text-sm"
+                style={{ border: '1px dashed #3A3D45', color: '#5A5D65' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#00D9B5'; e.currentTarget.style.color = '#00D9B5' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#3A3D45'; e.currentTarget.style.color = '#5A5D65' }}
               >
-                <Upload size={24} strokeWidth={2} />
-                <span className="text-sm font-bold">Click to upload CSV file</span>
-                <span className="text-xs font-semibold text-primary-300">First row must be column headers</span>
+                <Upload size={22} strokeWidth={1} />
+                Click to upload CSV
               </button>
-            </div>
+            </>
           )}
-
-          {/* Tab: URL */}
           {tab === 'url' && (
             <div className="space-y-3">
               <div>
                 <label className="label">Google Sheets URL</label>
-                <input
-                  className="input"
-                  placeholder="https://docs.google.com/spreadsheets/d/..."
-                  value={sheetUrl}
-                  onChange={e => setSheetUrl(e.target.value)}
-                />
+                <input className="input" placeholder="https://docs.google.com/spreadsheets/d/…"
+                  value={sheetUrl} onChange={e => setSheetUrl(e.target.value)} />
               </div>
-              <button
-                onClick={handleFetchSheet}
-                disabled={loading || !sheetUrl}
-                className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Fetching...' : 'Fetch Sheet Data'}
+              <button onClick={handleFetchSheet} disabled={loading || !sheetUrl} className="btn-primary">
+                {loading ? 'Fetching…' : 'Fetch Sheet Data'}
               </button>
             </div>
           )}
-
-          {/* Tab: Paste */}
           {tab === 'paste' && (
             <div>
               <label className="label">Paste CSV Data</label>
-              <textarea
-                className="input resize-none font-mono text-xs"
-                rows={6}
-                placeholder="Paste CSV content here — first row must be column headers..."
-                value={csvText}
-                onChange={e => setCsvText(e.target.value)}
-              />
-              <button
-                onClick={() => parseCsvText(csvText)}
-                disabled={!csvText.trim()}
-                className="btn-primary mt-2 disabled:opacity-40"
-              >
-                Parse CSV
+              <textarea className="input resize-none font-mono text-xs" rows={6}
+                placeholder="First row must be headers…" value={csvText}
+                onChange={e => setCsvText(e.target.value)} />
+              <button onClick={() => parseCsvText(csvText)} disabled={!csvText.trim()} className="btn-primary mt-2">
+                Parse
               </button>
             </div>
           )}
@@ -181,18 +145,16 @@ export default function ImportModal({ onClose }) {
           {/* Column mapping + preview */}
           {parsed && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-primary-600">
-                <CheckCircle size={15} strokeWidth={2.5} />
-                <span className="text-xs font-bold">
-                  Loaded {parsed.rows.length} rows · {parsed.headers.length} columns
-                </span>
+              <div className="flex items-center gap-2 text-xs" style={{ color: '#00D9B5' }}>
+                <CheckCircle size={13} strokeWidth={1.5} />
+                {parsed.rows.length} rows · {parsed.headers.length} columns
               </div>
 
               <div>
-                <p className="text-[10px] font-bold text-primary-500 uppercase tracking-widest mb-3">Map Columns</p>
-                <div className="grid grid-cols-2 gap-3">
+                <label className="label">Map Columns</label>
+                <div className="grid grid-cols-2 gap-2">
                   {[
-                    { key: 'name',       label: 'Employee Name *' },
+                    { key: 'name',       label: 'Name *'          },
                     { key: 'employeeId', label: 'Employee ID'     },
                     { key: 'shifts',     label: 'Preferred Shifts' },
                     { key: 'days',       label: 'Available Days'  },
@@ -200,10 +162,9 @@ export default function ImportModal({ onClose }) {
                   ].map(({ key, label }) => (
                     <div key={key}>
                       <label className="label">{label}</label>
-                      <select
-                        className="input text-xs"
-                        value={colMap[key]}
+                      <select className="input text-xs" value={colMap[key]}
                         onChange={e => setColMap({ ...colMap, [key]: e.target.value })}
+                        style={{ background: '#1C1E22', color: '#F0EEE9' }}
                       >
                         <option value="">(skip)</option>
                         {parsed.headers.map(h => <option key={h} value={h}>{h}</option>)}
@@ -215,21 +176,21 @@ export default function ImportModal({ onClose }) {
 
               {/* Preview */}
               <div>
-                <p className="text-[10px] font-bold text-primary-500 uppercase tracking-widest mb-2">Preview (first 3 rows)</p>
-                <div className="overflow-x-auto rounded-xl border-2 border-primary-100">
-                  <table className="w-full text-[11px]">
-                    <thead className="bg-primary-50">
-                      <tr>
+                <label className="label">Preview</label>
+                <div className="rounded-lg overflow-hidden text-xs" style={{ border: '0.5px solid #2A2D33' }}>
+                  <table className="w-full">
+                    <thead>
+                      <tr style={{ background: '#1C1E22', borderBottom: '0.5px solid #2A2D33' }}>
                         {parsed.headers.map(h => (
-                          <th key={h} className="px-3 py-2 text-left text-primary-600 font-bold border-b-2 border-primary-100">{h}</th>
+                          <th key={h} className="px-2 py-1.5 text-left font-medium" style={{ color: '#8A8D95' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {parsed.rows.slice(0, 3).map((row, i) => (
-                        <tr key={i} className="border-b border-primary-50 last:border-0">
+                        <tr key={i} style={{ borderBottom: i < 2 ? '0.5px solid #1C1E22' : 'none' }}>
                           {parsed.headers.map(h => (
-                            <td key={h} className="px-3 py-2 text-primary-700 font-semibold max-w-[120px] truncate">
+                            <td key={h} className="px-2 py-1.5 max-w-[120px] truncate" style={{ color: '#F0EEE9' }}>
                               {row[h] || '–'}
                             </td>
                           ))}
@@ -240,38 +201,25 @@ export default function ImportModal({ onClose }) {
                 </div>
               </div>
 
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="rounded border-2 border-primary-300 text-primary-600 focus:ring-primary-500"
-                  checked={replace}
-                  onChange={e => setReplace(e.target.checked)}
-                />
-                <span className="text-xs font-semibold text-primary-700">
-                  Replace existing employees instead of merging
-                </span>
+              <label className="flex items-center gap-2 cursor-pointer text-xs" style={{ color: '#8A8D95' }}>
+                <input type="checkbox" checked={replace} onChange={e => setReplace(e.target.checked)}
+                  className="accent-accent" />
+                Replace existing employees
               </label>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 px-5 py-4 border-t-2 border-primary-100">
-          <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
-          <button
-            onClick={handleImport}
-            disabled={!parsed || !colMap.name}
-            className="btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <ArrowRight size={14} strokeWidth={2.5} />
-            Import {parsed ? `${parsed.rows.length} Employees` : 'Employees'}
+        <div className="flex gap-2 px-5 py-4 flex-shrink-0" style={{ borderTop: '0.5px solid #2A2D33' }}>
+          <button onClick={onClose} className="btn flex-1 justify-center">Cancel</button>
+          <button onClick={handleImport} disabled={!parsed || !colMap.name}
+            className="btn-primary flex-1 justify-center disabled:opacity-40">
+            <ArrowRight size={14} strokeWidth={1.5} />
+            Import Employees
           </button>
         </div>
       </div>
     </div>
   )
-}
-
-function clsx(...classes) {
-  return classes.filter(Boolean).join(' ')
 }
