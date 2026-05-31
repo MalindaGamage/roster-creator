@@ -113,9 +113,16 @@ Answer in 1-3 concise sentences. Use real names.`
 
         {/* Offline notice */}
         {online === false && (
-          <div className="px-4 py-2 flex-shrink-0" style={{ background: '#130A0A', borderBottom: '0.5px solid #3A1010' }}>
-            <p className="text-xs font-mono" style={{ color: '#D94040' }}>
-              $ ollama pull llama3.2 && ollama serve
+          <div className="px-4 py-3 flex-shrink-0 space-y-1" style={{ background: '#130A0A', borderBottom: '0.5px solid #3A1010' }}>
+            <p className="text-xs font-mono" style={{ color: '#D94040' }}># Ollama offline or CORS blocked</p>
+            <p className="text-xs font-mono" style={{ color: '#8A8D95' }}>
+              $ <span style={{ color: '#00D9B5' }}>$env:OLLAMA_ORIGINS</span>=<span style={{ color: '#F0EEE9' }}>"*"</span>
+            </p>
+            <p className="text-xs font-mono" style={{ color: '#8A8D95' }}>
+              $ ollama serve
+            </p>
+            <p className="text-xs font-mono mt-1" style={{ color: '#5A5D65' }}>
+              # Required when accessing from a deployed URL
             </p>
           </div>
         )}
