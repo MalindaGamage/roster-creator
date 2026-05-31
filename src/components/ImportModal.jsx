@@ -62,9 +62,9 @@ export default function ImportModal({ onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
-      <div className="w-full max-w-2xl max-h-[88vh] flex flex-col shadow-modal" style={MS}>
+      <div className="modal-sheet w-full max-w-2xl max-h-[88vh] flex flex-col shadow-modal" style={MS}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 flex-shrink-0" style={{ borderBottom: '0.5px solid #2A2D33' }}>

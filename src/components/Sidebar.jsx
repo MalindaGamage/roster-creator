@@ -48,7 +48,7 @@ export default function Sidebar({ active, onNav, onAutoSchedule, onExport, onOpe
         <p className="px-3 py-2 text-2xs font-medium uppercase tracking-label" style={{ color: '#5A5D65' }}>
           Navigation
         </p>
-        {NAV.map(({ id, icon: Icon, label }) => {
+        {NAV.map(({ id, icon: Icon, label }, idx) => {
           const isActive = active === id
           return (
             <button
@@ -56,10 +56,9 @@ export default function Sidebar({ active, onNav, onAutoSchedule, onExport, onOpe
               onClick={() => onNav(id)}
               className={clsx(
                 'relative w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium',
-                'transition-all duration-150 text-left',
-                isActive
-                  ? 'nav-item-active'
-                  : 'hover:bg-surface-3'
+                'hover-slide anim-left',
+                `d-${idx + 1}`,
+                isActive ? 'nav-item-active' : ''
               )}
               style={{
                 background: isActive ? '#1C1E22' : 'transparent',

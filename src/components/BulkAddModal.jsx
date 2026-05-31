@@ -21,9 +21,9 @@ export default function BulkAddModal({ onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-      <div className="w-full max-w-sm shadow-modal" style={MODAL_STYLE}>
+      <div className="modal-sheet w-full max-w-sm shadow-modal" style={MODAL_STYLE}>
 
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '0.5px solid #2A2D33' }}>
           <div className="flex items-center gap-2">

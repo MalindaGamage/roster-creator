@@ -187,3 +187,180 @@
 
 /* cursor pointer enforcement */
 button, [role="button"], a, select { cursor: pointer; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   MOTION SYSTEM — UI/UX Pro Max standards
+   • All transitions 150ms ease
+   • One orchestrated page-load animation (staggered reveals)
+   • Hover states on every interactive element
+   • No blur / glow / shadow
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Keyframes ─────────────────────────────────────────────────────── */
+
+/* Entry: rise from below + fade */
+@keyframes riseUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* Entry: slide from left + fade */
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0);     }
+}
+
+/* Entry: soft fade */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Teal accent sweep — thin line across element on load */
+@keyframes accentSweep {
+  from { transform: scaleX(0); transform-origin: left center; }
+  to   { transform: scaleX(1); transform-origin: left center; }
+}
+
+/* Assignment flash — cell briefly tints teal when employee is dropped */
+@keyframes assignFlash {
+  0%   { background-color: rgba(0,217,181,0.18); }
+  100% { background-color: transparent;          }
+}
+
+/* Understaffed indicator — left border pulses to teal */
+@keyframes needsStaff {
+  0%, 100% { border-left-color: #2A2D33; }
+  50%       { border-left-color: #00D9B5; }
+}
+
+/* Hours bar grow from zero */
+@keyframes barGrow {
+  from { width: 0 !important; }
+  to   { /* inherits inline width */ }
+}
+
+/* Floating card hover lift (applied via JS class) */
+@keyframes cardFloat {
+  from { transform: translateY(0);   }
+  to   { transform: translateY(-2px);}
+}
+
+/* Teal dot / badge appear */
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.7); }
+  to   { opacity: 1; transform: scale(1);   }
+}
+
+/* Chip appear in cell */
+@keyframes chipReveal {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1);    }
+}
+
+/* ── Animation utility classes ─────────────────────────────────────── */
+
+.anim-rise   { animation: riseUp      400ms ease-out both; }
+.anim-left   { animation: slideInLeft 300ms ease-out both; }
+.anim-fade   { animation: fadeIn      300ms ease-out both; }
+.anim-pop    { animation: popIn       200ms ease-out both; }
+.anim-chip   { animation: chipReveal  200ms ease-out both; }
+
+/* Stagger delays — apply alongside anim-* */
+.d-0  { animation-delay:   0ms; }
+.d-1  { animation-delay:  50ms; }
+.d-2  { animation-delay: 100ms; }
+.d-3  { animation-delay: 150ms; }
+.d-4  { animation-delay: 200ms; }
+.d-5  { animation-delay: 250ms; }
+.d-6  { animation-delay: 300ms; }
+.d-7  { animation-delay: 350ms; }
+.d-8  { animation-delay: 400ms; }
+
+/* Assignment flash */
+.cell-flash { animation: assignFlash 500ms ease-out forwards; }
+
+/* Understaffed Shift E */
+.needs-staff { animation: needsStaff 1.8s ease-in-out infinite; }
+
+/* Hours bar fill */
+.bar-fill { animation: barGrow 700ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+
+/* ── Hover transforms — every interactive element ──────────────────── */
+
+/* Cards lift */
+.hover-lift { transition: transform 150ms ease, border-color 150ms ease; }
+.hover-lift:hover { transform: translateY(-2px); }
+
+/* Nav items slide right */
+.hover-slide { transition: transform 150ms ease, color 150ms ease, background 150ms ease; }
+.hover-slide:hover { transform: translateX(3px); }
+
+/* Buttons pulse scale */
+.hover-scale { transition: transform 150ms ease; }
+.hover-scale:hover  { transform: scale(1.02); }
+.hover-scale:active { transform: scale(0.98); }
+
+/* Accent sweep on load for topbar */
+.accent-bar {
+  height: 1px;
+  background: var(--accent);
+  animation: accentSweep 600ms 200ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ── Mobile: modals become bottom sheets ────────────────────────────── */
+@media (max-width: 767px) {
+  .modal-sheet {
+    position: fixed !important;
+    inset-x: 0 !important;
+    bottom: 0 !important;
+    top: auto !important;
+    max-height: 92vh !important;
+    border-radius: 16px 16px 0 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-bottom: none !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+  .modal-overlay { align-items: flex-end !important; }
+  .btn, .btn-primary, .btn-danger { min-height: 40px; }
+  .btn-icon { width: 40px !important; height: 40px !important; }
+  * { -webkit-tap-highlight-color: transparent; }
+}
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .mobile-safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* ── Mobile: modals become bottom sheets ──────────────────────────── */
+@media (max-width: 767px) {
+  .modal-sheet {
+    position: fixed !important;
+    inset-x: 0 !important;
+    bottom: 0 !important;
+    top: auto !important;
+    max-height: 92vh !important;
+    border-radius: 16px 16px 0 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-bottom: none !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+  .modal-overlay {
+    align-items: flex-end !important;
+  }
+
+  /* Larger tap targets on mobile */
+  .btn, .btn-primary, .btn-danger { min-height: 40px; }
+  .btn-icon { width: 40px !important; height: 40px !important; }
+
+  /* Prevent text selection on tap */
+  * { -webkit-tap-highlight-color: transparent; }
+}
+
+/* Safe area for notched phones */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .mobile-safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}

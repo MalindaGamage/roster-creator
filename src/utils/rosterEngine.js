@@ -53,8 +53,9 @@ export function fillEmptySlots(
     if (ids?.length) assignments[k] = [...ids]
   }
 
-  const hours  = Object.fromEntries(employees.map(e => [e.id, 0]))
-  const nights = Object.fromEntries(employees.map(e => [e.id, 0]))
+  const hours       = Object.fromEntries(employees.map(e => [e.id, 0]))
+  const nights      = Object.fromEntries(employees.map(e => [e.id, 0]))
+  const backupCount = Object.fromEntries(employees.map(e => [e.id, 0]))  // max 1 Backup/week
 
   // Populate from existing (Backup hours = 0 — on-call not counted)
   for (const [key, ids] of Object.entries(assignments)) {
@@ -65,6 +66,7 @@ export function fillEmptySlots(
       if (!(id in hours)) continue
       hours[id] += h
       if (isN) nights[id]++
+      if (sk === 'Backup') backupCount[id]++
     }
   }
 
@@ -105,7 +107,8 @@ export function fillEmptySlots(
   function assign(key, d, shiftKey, emp) {
     assignments[key] = [...(assignments[key] || []), emp.id]
     hours[emp.id]  += effectiveHours(shiftKey)   // Backup = 0h
-    if (IS_NIGHT(shiftKey)) nights[emp.id]++
+    if (IS_NIGHT(shiftKey))  nights[emp.id]++
+    if (shiftKey === 'Backup') backupCount[emp.id]++
     workedOnDay[d].add(emp.id)
   }
 
@@ -127,17 +130,31 @@ export function fillEmptySlots(
 
       const eh = effectiveHours(shift.key)
 
-      // Base eligibility (employees who still need nights go first)
+      // Base eligibility
       const eligible = employees.filter(e => {
         if (alreadyIn.has(e.id))      return false
         if (workedOnDay[d].has(e.id)) return false
         if (IS_NIGHT(shift.key) && nights[e.id] >= nightTarget(e)) return false
-        const wantShift = e.shifts.length === 0 || e.shifts.includes(shift.key)
-        const wantDay   = e.days.length   === 0 || e.days.includes(d)
+        // Backup: max 1 per employee per week
+        if (shift.key === 'Backup' && backupCount[e.id] >= 1) return false
+        // Backup is universal on-call — everyone can do it regardless of shift preference
+        const wantShift = shift.key === 'Backup'
+          ? true
+          : (e.shifts.length === 0 || e.shifts.includes(shift.key))
+        const wantDay   = e.days.length === 0 || e.days.includes(d)
         return wantShift && wantDay && hours[e.id] + eh <= maxHours
       })
 
-      const primary = sortEligible(eligible, shift.key).slice(0, needed)
+      // For Backup: sort MOST hours first so well-covered employees take on-call duty,
+      // freeing under-hours employees' days for real (paid) shifts
+      let sorted
+      if (shift.key === 'Backup') {
+        sorted = eligible.slice().sort((a, b) => hours[b.id] - hours[a.id])
+      } else {
+        sorted = sortEligible(eligible, shift.key)
+      }
+
+      const primary = sorted.slice(0, needed)
       primary.forEach(emp => assign(key, d, shift.key, emp))
 
       // ── Shift E coverage guarantee ─────────────────────────────────
@@ -209,7 +226,9 @@ export function fillEmptySlots(
         if (eh === 0) continue                                   // 0h shift — skip
         if (hours[emp.id] + eh > maxHours) continue
 
-        const wantShift = emp.shifts.length === 0 || emp.shifts.includes(shift.key)
+        const wantShift = shift.key === 'Backup'
+          ? true
+          : (emp.shifts.length === 0 || emp.shifts.includes(shift.key))
         const wantDay   = emp.days.length   === 0 || emp.days.includes(d)
         if (!wantShift || !wantDay) continue
 
