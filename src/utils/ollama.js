@@ -1,8 +1,10 @@
 /**
- * Ollama API wrapper — calls the local Ollama server via Vite proxy (/ollama).
+ * Ollama API wrapper.
+ * Dev:  calls via Vite proxy at /ollama  → localhost:11434 (avoids CORS)
+ * Prod: calls localhost:11434 directly   (browsers allow http://localhost from HTTPS pages)
  */
 
-const BASE = '/ollama'
+const BASE = import.meta.env.DEV ? '/ollama' : 'http://localhost:11434'
 
 export async function ollamaChat(model, messages, onChunk) {
   const stream = typeof onChunk === 'function'

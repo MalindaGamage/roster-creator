@@ -74,6 +74,126 @@ npm run preview
 
 ---
 
+## Deployment
+
+The app is a pure static site (no backend) — it can be hosted for free on any static hosting platform.
+
+**Live URL:** [https://roster-creator.vercel.app](https://roster-creator.vercel.app)
+
+---
+
+### Vercel (recommended — zero config)
+
+#### First deploy
+
+```powershell
+# Install Vercel CLI globally
+npm install -g vercel
+
+# Deploy from the project root
+cd "E:\roster_creator"
+vercel
+```
+
+Answer the prompts:
+```
+? Which team?                        → select your account
+? Link to existing project?          → no
+? Name?                              → roster-creator
+? In which directory is your code?   → ./  (press Enter)
+? Customize settings?                → no
+```
+
+Vercel auto-detects Vite and deploys in ~30 seconds. You get two URLs:
+- **Preview:** `https://roster-creator-<hash>.vercel.app`
+- **Aliased:** `https://roster-creator.vercel.app`
+
+#### Redeploy after code changes
+
+```powershell
+vercel --prod
+```
+
+#### Auto-deploy on every git push
+
+1. Push your code to GitHub
+2. Go to [vercel.com](https://vercel.com) → **Add New → Project**
+3. Import the GitHub repository
+4. Click **Deploy**
+
+From that point, every `git push origin main` triggers an automatic production deployment.
+
+---
+
+### Netlify (alternative)
+
+```powershell
+# Install Netlify CLI
+npm install -g netlify-cli
+
+# Build then deploy
+npm run build
+netlify deploy --prod --dir=dist
+```
+
+Or drag and drop the `dist/` folder at [app.netlify.com](https://app.netlify.com).
+
+---
+
+### GitHub Pages
+
+Add `base` to `vite.config.js` (replace `roster-creator` with your repo name):
+
+```js
+export default defineConfig({
+  base: '/roster-creator/',
+  plugins: [react()],
+})
+```
+
+Then build and push the `dist/` folder to the `gh-pages` branch:
+
+```powershell
+npm run build
+npx gh-pages -d dist
+```
+
+Enable GitHub Pages in **repo Settings → Pages → Branch: gh-pages**.
+
+---
+
+### Platform comparison
+
+| Platform | Free tier | Auto-deploy | Custom domain |
+|---|---|---|---|
+| **Vercel** ← used | Unlimited static, 100 GB/month | Yes (GitHub) | Free subdomain + custom |
+| Netlify | 100 GB/month | Yes (GitHub) | Free subdomain + custom |
+| Cloudflare Pages | Unlimited | Yes (GitHub) | Free subdomain + custom |
+| GitHub Pages | Unlimited | Via Actions | `username.github.io/repo` |
+
+---
+
+### AI Chat on the deployed app
+
+The AI assistant calls **your local Ollama** — each user needs Ollama running on their own machine. Because browsers allow `http://localhost` connections even from HTTPS pages, this works without any additional proxy.
+
+**Run Ollama with CORS open** (required for the deployed URL):
+
+```powershell
+# Windows — set environment variable then start Ollama
+$env:OLLAMA_ORIGINS = "*"
+ollama serve
+```
+
+To make it permanent, add `OLLAMA_ORIGINS=*` to your System Environment Variables and restart Ollama.
+
+```bash
+# macOS / Linux
+OLLAMA_ORIGINS="*" ollama serve
+```
+
+---
+
 ## Workflow
 
 ### 1. Add Employees
