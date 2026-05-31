@@ -1,6 +1,7 @@
 // ── Shift definitions ────────────────────────────────────────────────────
 // B (onsite night) = 15h. All others = 8h.
-export const SHIFT_HOURS = { A: 8, B: 15, C: 8, D: 8, E: 8, Backup: 8 }
+// Backup = 0 — on-call hours are not counted toward the weekly min/max totals
+export const SHIFT_HOURS = { A: 8, B: 15, C: 8, D: 8, E: 8, Backup: 0 }
 export const MAX_HOURS_PER_WEEK = 45
 export const MIN_HOURS_PER_WEEK = 32
 

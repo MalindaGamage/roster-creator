@@ -2,7 +2,9 @@ import { SHIFTS, SHIFT_HOURS, MAX_HOURS_PER_WEEK, MIN_HOURS_PER_WEEK } from './c
 
 const REQUIRED_STAFF  = (sk) => sk === 'E' ? 2 : 1
 const IS_NIGHT        = (sk) => sk === 'B' || sk === 'E'
-const SHIFT_MAP       = Object.fromEntries(SHIFTS.map(s => [s.key, s]))
+
+// Backup is on-call — hours are not counted toward weekly totals
+const effectiveHours  = (sk) => sk === 'Backup' ? 0 : (SHIFT_HOURS[sk] ?? 8)
 
 /** Total scheduled hours for one employee from an assignments map. */
 export function calcEmployeeHours(employeeId, assignments) {
@@ -10,7 +12,7 @@ export function calcEmployeeHours(employeeId, assignments) {
   for (const [key, ids] of Object.entries(assignments)) {
     if (!ids.includes(employeeId)) continue
     const sk = key.slice(key.indexOf('-') + 1)
-    h += SHIFT_HOURS[sk] ?? 8
+    h += effectiveHours(sk)   // Backup = 0 (on-call, not counted)
   }
   return h
 }
@@ -54,15 +56,14 @@ export function fillEmptySlots(
   const hours  = Object.fromEntries(employees.map(e => [e.id, 0]))
   const nights = Object.fromEntries(employees.map(e => [e.id, 0]))
 
-  // Populate from existing
+  // Populate from existing (Backup hours = 0 — on-call not counted)
   for (const [key, ids] of Object.entries(assignments)) {
-    const sk = key.slice(key.indexOf('-') + 1)
-    const h  = SHIFT_HOURS[sk] ?? 8
+    const sk  = key.slice(key.indexOf('-') + 1)
+    const h   = effectiveHours(sk)
     const isN = IS_NIGHT(sk)
-    const d  = parseInt(key.slice(0, key.indexOf('-')))
     for (const id of ids) {
       if (!(id in hours)) continue
-      hours[id]  += h
+      hours[id] += h
       if (isN) nights[id]++
     }
   }
@@ -102,9 +103,8 @@ export function fillEmptySlots(
 
   /* ── Helper: assign one employee to a cell ───────────────────────── */
   function assign(key, d, shiftKey, emp) {
-    const h = SHIFT_HOURS[shiftKey] ?? 8
     assignments[key] = [...(assignments[key] || []), emp.id]
-    hours[emp.id]  += h
+    hours[emp.id]  += effectiveHours(shiftKey)   // Backup = 0h
     if (IS_NIGHT(shiftKey)) nights[emp.id]++
     workedOnDay[d].add(emp.id)
   }
@@ -125,17 +125,39 @@ export function fillEmptySlots(
 
       const alreadyIn = new Set(current)
 
+      const eh = effectiveHours(shift.key)
+
+      // Base eligibility (employees who still need nights go first)
       const eligible = employees.filter(e => {
-        if (alreadyIn.has(e.id))             return false  // already in this cell
-        if (workedOnDay[d].has(e.id))        return false  // already working today
-        if (IS_NIGHT(shift.key) && nights[e.id] >= nightTarget(e)) return false  // night quota full
+        if (alreadyIn.has(e.id))      return false
+        if (workedOnDay[d].has(e.id)) return false
+        if (IS_NIGHT(shift.key) && nights[e.id] >= nightTarget(e)) return false
         const wantShift = e.shifts.length === 0 || e.shifts.includes(shift.key)
         const wantDay   = e.days.length   === 0 || e.days.includes(d)
-        const fitsHours = hours[e.id] + shift.hours <= maxHours
-        return wantShift && wantDay && fitsHours
+        return wantShift && wantDay && hours[e.id] + eh <= maxHours
       })
 
-      sortEligible(eligible, shift.key).slice(0, needed).forEach(emp => assign(key, d, shift.key, emp))
+      const primary = sortEligible(eligible, shift.key).slice(0, needed)
+      primary.forEach(emp => assign(key, d, shift.key, emp))
+
+      // ── Shift E coverage guarantee ─────────────────────────────────
+      // If Shift E still needs more employees after the primary fill
+      // (quota-complete employees used up the pool), supplement from
+      // employees who have finished their night quota but are still eligible.
+      const stillNeeded = REQUIRED_STAFF(shift.key) - (assignments[key] || []).length
+      if (shift.key === 'E' && stillNeeded > 0) {
+        const assigned = new Set(assignments[key] || [])
+        const supplement = employees.filter(e => {
+          if (assigned.has(e.id))        return false
+          if (workedOnDay[d].has(e.id)) return false
+          const wantShift = e.shifts.length === 0 || e.shifts.includes('E')
+          const wantDay   = e.days.length   === 0 || e.days.includes(d)
+          return wantShift && wantDay && hours[e.id] + eh <= maxHours
+        })
+        // Sort: fewest extra nights first (least disruption to targets)
+        supplement.sort((a, b) => nights[a.id] - nights[b.id] || hours[a.id] - hours[b.id])
+        supplement.slice(0, stillNeeded).forEach(emp => assign(key, d, 'E', emp))
+      }
     }
   }
 
@@ -154,7 +176,7 @@ export function fillEmptySlots(
         if (nights[emp.id] >= target) break
         if (workedOnDay[d].has(emp.id))        continue
         if (!emp.days.includes(d) && emp.days.length > 0) continue
-        if (hours[emp.id] + shift.hours > maxHours) continue
+        if (hours[emp.id] + effectiveHours(shift.key) > maxHours) continue
 
         const key     = `${d}-${shift.key}`
         const current = assignments[key] || []
@@ -174,17 +196,22 @@ export function fillEmptySlots(
 
     for (const shift of SHIFTS) {
       if (hours[emp.id] >= minHours) break
+      // Skip Backup — it contributes 0h and would waste a day slot
+      if (shift.key === 'Backup') continue
+      // Skip extra nights beyond quota
+      if (IS_NIGHT(shift.key) && nights[emp.id] >= nightTarget(emp)) continue
+
       for (let d = 0; d < numDays; d++) {
         if (hours[emp.id] >= minHours) break
-        if (workedOnDay[d].has(emp.id))        continue
-        if (hours[emp.id] + shift.hours > maxHours) continue
+        if (workedOnDay[d].has(emp.id)) continue
+
+        const eh = effectiveHours(shift.key)
+        if (eh === 0) continue                                   // 0h shift — skip
+        if (hours[emp.id] + eh > maxHours) continue
 
         const wantShift = emp.shifts.length === 0 || emp.shifts.includes(shift.key)
         const wantDay   = emp.days.length   === 0 || emp.days.includes(d)
         if (!wantShift || !wantDay) continue
-
-        // Don't assign extra nights to employees already at their quota
-        if (IS_NIGHT(shift.key) && nights[emp.id] >= nightTarget(emp)) continue
 
         const key     = `${d}-${shift.key}`
         const current = assignments[key] || []

@@ -34,6 +34,10 @@ export function applyKnownPreferences(store) {
 
   const newRules = [
     {
+      text: 'Shift E (Remote Night 9PM-5AM) requires exactly 2 employees per slot for adequate coverage. All other shifts (A, B, C, D, Backup) require 1 employee per slot.',
+      category: 'coverage',
+    },
+    {
       text: 'Every employee must work minimum 32 hours and maximum 45 hours per week. Shift B (onsite night) = 15h, all other shifts = 8h',
       category: 'workload',
     },

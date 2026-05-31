@@ -15,7 +15,7 @@ const useRosterStore = create(
       employees: [],
       assignments: {}, // key: "dayIdx-shiftKey", value: string[] (employeeIds)
       rules: [
-        { id: 'r1', text: 'Each shift should have at least 2 employees for adequate coverage', category: 'coverage' },
+        { id: 'r1', text: 'Shift E (Remote Night 9PM-5AM) requires exactly 2 employees per slot for adequate coverage. All other shifts (A, B, C, D, Backup) require 1 employee per slot.', category: 'coverage' },
         { id: 'r2', text: 'No employee should work more than 5 days per week', category: 'workload' },
         { id: 'r3', text: 'Night shifts (Shift B and Shift E) require experienced or senior staff', category: 'qualifications' },
         { id: 'r4', text: 'Distribute shifts fairly across all available employees', category: 'preferences' },
