@@ -184,6 +184,160 @@ ollama pull llama3.2
 
 ---
 
+## Core Software Engineering Concepts
+
+This project applies a range of fundamental software engineering principles. Each concept is documented here with the specific reason it was chosen.
+
+---
+
+### 1. Component-Based Architecture
+
+**Where:** Every UI element is an isolated React component (`RosterGrid`, `EmployeePanel`, `AIPanel`, etc.)
+
+**Why:** Breaks a complex UI into small, independently testable, reusable pieces. A change to `ChatImportModal` cannot accidentally break `RosterGrid` because they share no internal state. New features (e.g. a new modal) are added by creating a new component without touching existing ones — following the **Open/Closed Principle**.
+
+---
+
+### 2. Single Source of Truth (Centralised State Management)
+
+**Where:** `src/store/rosterStore.js` — one Zustand store holds all app state: employees, assignments, rules, week, settings.
+
+**Why:** Multiple components (`Header`, `RosterGrid`, `EmployeePanel`, `AIPanel`) all need to read and write the same roster data. Without a single store, each component would maintain its own copy of the data, leading to inconsistency (e.g. the grid showing different assignments than the export). Centralising state ensures every component always sees the same truth.
+
+---
+
+### 3. Persistence Layer (localStorage)
+
+**Where:** Zustand `persist` middleware in `rosterStore.js` automatically serialises and deserialises state to `localStorage`.
+
+**Why:** A roster takes significant effort to build. Without persistence, refreshing the browser would destroy all work. Since there is no backend, `localStorage` acts as the database. This is a deliberate architectural trade-off: zero infrastructure cost in exchange for data being device-local.
+
+---
+
+### 4. Separation of Concerns
+
+**Where:** Business logic, UI, and data are strictly separated:
+- `rosterEngine.js` — scheduling algorithm (pure functions, no UI imports)
+- `excelExport.js` — file generation (no UI imports)
+- `googleSheets.js` — data parsing (no UI imports)
+- `constants.js` — domain constants (shift hours, colours)
+- Components — UI only, call utilities via imports
+
+**Why:** The scheduling engine can be tested, modified, or replaced without touching any component. If the Excel format changes, only `excelExport.js` needs updating. This directly reduces the scope of bugs and makes the codebase easier to reason about.
+
+---
+
+### 5. Pure Functions and Immutability
+
+**Where:** `fillEmptySlots()`, `autoSchedule()`, `calcEmployeeHours()`, `calcEmployeeNights()`, `parseMessages()` — all return new data structures rather than mutating inputs.
+
+**Why:** Pure functions with no side effects are predictable — the same inputs always produce the same outputs. This makes the scheduling logic trivially testable and prevents subtle bugs where one pass of the algorithm corrupts state used by the next pass. Zustand state updates also use immutable patterns (`{ ...state, employees: [...state.employees, newEmp] }`).
+
+---
+
+### 6. Multi-Pass Algorithm Design
+
+**Where:** `fillEmptySlots()` in `rosterEngine.js` runs three sequential passes over the data:
+1. **Pass 1** — fill all empty/understaffed slots (nights first)
+2. **Night Quota Pass** — ensure every employee reaches their night shift target
+3. **Pass 2** — top up anyone still below the minimum weekly hours
+
+**Why:** A single-pass greedy algorithm cannot simultaneously optimise for coverage, night quotas, and minimum hours — these constraints interact. Breaking the problem into ordered passes makes each pass's responsibility clear, makes the algorithm easier to debug (you can inspect state between passes), and allows new constraints to be added as new passes without restructuring existing logic.
+
+---
+
+### 7. Greedy Algorithm with Priority Sorting
+
+**Where:** Inside each pass of `fillEmptySlots()`, eligible employees are sorted by:
+1. Night shift deficit (highest deficit first)
+2. Explicit shift preference match
+3. Hour deficit from minimum
+4. Total hours (least first — fairness)
+
+**Why:** A greedy algorithm makes locally optimal choices at each step. The priority sort ensures that employees most in need of a particular type of shift (e.g. haven't had their 2 nights yet) are assigned first, naturally satisfying constraints without backtracking. This produces good-enough results in O(n·m) time (employees × slots), which is fast enough for any real team size.
+
+---
+
+### 8. Rule-Based / RAG (Retrieval-Augmented Generation) System
+
+**Where:** `RulesModal.jsx` + `rosterStore.js` rules array + `buildAIPrompt()` in `rosterEngine.js`.
+
+**Why:** Hard-coding scheduling rules into the algorithm makes the system rigid — every new rule requires a code change and redeployment. Instead, rules are stored as plain text in the store (the "knowledge base"), retrieved at generation time, and injected into the AI's context prompt. This is the core pattern of RAG: augment a generative model with domain-specific retrieved knowledge. Managers can add, edit, or remove rules at runtime without touching code.
+
+---
+
+### 9. Natural Language Processing — Rule-Based Parsing
+
+**Where:** `extractEntries()` in `ChatImportModal.jsx` — parses free-form WhatsApp messages into structured `{ person, action, days, shift }` objects using regular expressions.
+
+**Why:** The input source (WhatsApp messages) is unstructured human language. Rather than forcing users to use a rigid form, the parser meets users where they are. A regex-based approach was chosen over a full AI parser because: (1) the message patterns are consistent and enumerable, (2) regex is deterministic and never hallucinates, (3) it works offline with zero latency. The AI is reserved only for genuinely ambiguous conversational Q&A where deterministic rules cannot help.
+
+---
+
+### 10. Proxy Pattern (Vite Dev Proxy)
+
+**Where:** `vite.config.js` — proxies `/ollama/*` → `http://localhost:11434` and `/sheets-proxy/*` → `https://docs.google.com`.
+
+**Why:** Browsers enforce the Same-Origin Policy, which blocks direct `fetch()` calls to `localhost:11434` (Ollama) and `docs.google.com` (Google Sheets) from a page on a different origin. The Vite proxy acts as a same-origin relay during development, forwarding requests to those servers transparently. This is the standard pattern for decoupling frontend development from CORS restrictions without building a backend.
+
+---
+
+### 11. Drag and Drop — Sensor Abstraction
+
+**Where:** `App.jsx` — `DndContext` with `PointerSensor` and `KeyboardSensor` from `@dnd-kit/core`. Draggable employee cards (`useDraggable`) and droppable roster cells (`useDroppable`).
+
+**Why:** Drag-and-drop is the most natural interaction for assigning employees to shifts — it mirrors the physical act of placing a name card on a schedule board. `@dnd-kit` was chosen over browser-native drag events because it provides: sensor abstraction (works with mouse, touch, and keyboard — accessibility), a `DragOverlay` for a smooth floating preview, and clean separation between drag state and drop handling via the `onDragEnd` callback.
+
+---
+
+### 12. Optimistic UI Updates
+
+**Where:** `assignEmployee()` and `unassignEmployee()` in `rosterStore.js` update the Zustand store immediately — the grid re-renders instantly without waiting for any async operation.
+
+**Why:** Since this app has no backend, all operations are synchronous. The UI reflects changes in under 1ms, giving the user immediate visual feedback when they drop an employee onto the grid or click to remove them. This is the same pattern used in production apps to hide network latency — here it also eliminates the need for loading states entirely.
+
+---
+
+### 13. Deterministic Colour Assignment
+
+**Where:** `getEmployeeColor()` in `constants.js` — maps employee array index to a fixed 12-colour palette.
+
+**Why:** Each employee must have a consistent, distinguishable colour throughout the UI (panel badge, roster chip, drag overlay). Using the array index as a deterministic key means the same employee always gets the same colour within a session, with no additional state needed. This is a simple form of **hash-based identity mapping**.
+
+---
+
+### 14. Data Normalisation
+
+**Where:** The assignments store uses the key format `"dayIndex-shiftKey"` (e.g. `"2-B"`) mapping to an array of employee IDs.
+
+**Why:** This is a normalised data model — employees are stored once in the `employees` array and referenced by ID everywhere else. There is no duplication of employee name or details inside `assignments`. Benefits: updating an employee's name only requires changing one record, not scanning all assignments; the assignment map is compact and fast to query; and deriving computed values (hours, nights) is a single pass over the map.
+
+---
+
+### 15. Constraint Satisfaction (Multi-Constraint Scheduling)
+
+**Where:** `fillEmptySlots()` enforces simultaneously: coverage requirements, one-shift-per-day, max hours, min hours, night quota, employee shift preferences, employee day availability, employee-specific exceptions (Uminda, Lahiru).
+
+**Why:** Workforce scheduling is a classic **Constraint Satisfaction Problem (CSP)**. Rather than using a full CSP solver (which would be overkill for a team of ~15 people), a structured greedy approach with priority sorting satisfies all constraints in practice. Each constraint is encoded once — in the eligibility filter, the sort key, or a dedicated pass — making it easy to add new constraints (e.g. "no one works 3 nights in a row") without breaking existing ones.
+
+---
+
+### 16. Progressive Disclosure (UX Pattern)
+
+**Where:** Features are revealed progressively: the main view shows only the roster grid; Import, Rules, Settings, Chat Import, and AI are behind header buttons; each modal focuses on one task.
+
+**Why:** Showing all features at once creates cognitive overload. A manager opening the app for the first time sees only the roster grid and a few clear actions. Advanced features (bulk import, rules editor, AI chat) are one click away but don't clutter the default view. This follows the UX principle that the most common action should be the most accessible.
+
+---
+
+### 17. Design System (Tokens + Flat Design)
+
+**Where:** `tailwind.config.js` defines a token-based colour system (`primary`, `cta`). `constants.js` defines shift colours and employee colour palettes. All component styles use these tokens, not raw hex values. Design system generated using the **UI/UX Pro Max** skill (Flat Design style for workforce scheduling tools).
+
+**Why:** A design token system means changing the primary colour requires editing one value in `tailwind.config.js`, not hunting through 50 component files. Flat design was chosen for this tool because it prioritises information density, fast rendering, and accessibility (WCAG AA contrast ratios) — appropriate for a data-heavy scheduling tool used by managers, not a marketing landing page.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
