@@ -1,13 +1,14 @@
 import {
   CalendarDays, Users, Upload, MessageSquare,
-  BookOpen, Cpu, Settings, Zap, Download, BarChart2,
+  BookOpen, Cpu, Settings, Zap, Download, BarChart2, BookMarked,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 const NAV = [
-  { id: 'roster',    icon: CalendarDays,   label: 'Roster'      },
-  { id: 'report',    icon: BarChart2,      label: 'Reports'     },
-  { id: 'employees', icon: Users,          label: 'Employees'   },
+  { id: 'roster',     icon: CalendarDays,  label: 'Roster'      },
+  { id: 'report',     icon: BarChart2,     label: 'Reports'     },
+  { id: 'guidelines', icon: BookMarked,    label: 'Guidelines'  },
+  { id: 'employees',  icon: Users,         label: 'Employees'   },
   { id: 'import',    icon: Upload,         label: 'Import'      },
   { id: 'chat',      icon: MessageSquare,  label: 'Chat Import' },
   { id: 'rules',     icon: BookOpen,       label: 'Rules'       },

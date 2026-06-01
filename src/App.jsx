@@ -23,6 +23,7 @@ import RulesModal      from './components/RulesModal'
 import SettingsModal   from './components/SettingsModal'
 import ChatImportModal from './components/ChatImportModal'
 import ReportPage      from './components/ReportPage'
+import GuidelinesPage  from './components/GuidelinesPage'
 
 export default function App() {
   const { assignEmployee, employees, weekStart, numDays, setAssignments } = useRosterStore()
@@ -62,7 +63,8 @@ export default function App() {
     if (id === 'ai')        { setShowAI(true);                   return }
     if (id === 'employees') { setShowEmpPanel(v => !v);          return }
     if (id === 'roster')    { setShowEmpPanel(!isMobile);        return }
-    if (id === 'report')    { setShowEmpPanel(false);            return }
+    if (id === 'report')      { setShowEmpPanel(false);            return }
+    if (id === 'guidelines') { setShowEmpPanel(false);            return }
   }
 
   function handleAutoSchedule() {
@@ -166,8 +168,11 @@ export default function App() {
               {/* Report page */}
               {activeNav === 'report' && <ReportPage />}
 
+              {/* Guidelines page */}
+              {activeNav === 'guidelines' && <GuidelinesPage />}
+
               {/* Tap-to-assign banner */}
-              {activeNav !== 'report' && selectedEmp && isMobile && (
+              {activeNav !== 'report' && activeNav !== 'guidelines' && selectedEmp && isMobile && (
                 <div
                   className="mb-2 px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-between"
                   style={{ background: '#00D9B520', border: '1px solid #00D9B540', color: '#00D9B5' }}
@@ -178,11 +183,11 @@ export default function App() {
                 </div>
               )}
 
-              {activeNav !== 'report' && (
+              {activeNav !== 'report' && activeNav !== 'guidelines' && (
                 <RosterGrid onCellTap={handleCellTap} isMobile={isMobile} flashCell={flashCell} />
               )}
 
-              {!isMobile && activeNav !== 'report' && (
+              {!isMobile && activeNav !== 'report' && activeNav !== 'guidelines' && (
                 <p className="text-center text-xs mt-3 pb-1" style={{ color: '#3A3D45' }}>
                   Drag employees onto cells · Click × to remove · Auto-Schedule fills all slots
                 </p>

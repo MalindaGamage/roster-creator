@@ -46,6 +46,10 @@ export function applyKnownPreferences(store) {
       category: 'workload',
     },
     {
+      text: 'No consecutive night shifts: the auto-scheduler will never assign Shift B or E on back-to-back days for the same employee. After Shift B (ends 8AM), employee gets a full rest day. After Shift E (ends 5AM), employee cannot work Shift A (8AM) or C (5AM) next day but can work Shift D (1PM). Employee-requested consecutive nights via chat import are honoured as exceptions.',
+      category: 'workload',
+    },
+    {
       text: 'Every employee must do exactly 2 night shifts per week (Shift B or Shift E). Shift B = onsite night 5PM-8AM, Shift E = remote night 9PM-5AM',
       category: 'workload',
     },

@@ -6,6 +6,40 @@ const IS_NIGHT        = (sk) => sk === 'B' || sk === 'E'
 // Backup is on-call — hours are not counted toward weekly totals
 const effectiveHours  = (sk) => sk === 'Backup' ? 0 : (SHIFT_HOURS[sk] ?? 8)
 
+/**
+ * Rest period enforcement — prevents exhausting back-to-back scheduling.
+ *
+ * Rule 1 — No consecutive night shifts:
+ *   After Shift B or E, the auto-scheduler will NOT assign another B or E the next day.
+ *   (Manually entered consecutive nights from chat import are unaffected — they're
+ *    already in existingAssignments, so the scheduler never tries to create them again.)
+ *
+ * Rule 2 — Minimum rest after Shift B (ends 8AM):
+ *   Cannot start A (8AM), C (5AM), D (1PM), or Backup next day.
+ *   → Full rest day after Shift B. Only exception would be E (9PM) but Rule 1 blocks it.
+ *
+ * Rule 3 — Minimum rest after Shift E (ends 5AM):
+ *   Cannot start A (8AM — 3h rest) or C (5AM — 0h rest) next day.
+ *   D (1PM — 8h rest ✓) and Backup are still allowed.
+ */
+function violatesRest(employeeId, dayIdx, shiftKey, assignments) {
+  if (dayIdx === 0) return false
+  const prevDay = dayIdx - 1
+  const hadB    = (assignments[`${prevDay}-B`] || []).includes(employeeId)
+  const hadE    = (assignments[`${prevDay}-E`] || []).includes(employeeId)
+
+  // Rule 1: no consecutive night shifts (B or E after B or E)
+  if ((hadB || hadE) && IS_NIGHT(shiftKey)) return true
+
+  // Rule 2: after Shift B → full rest day (nothing else allowed)
+  if (hadB && ['A', 'C', 'D', 'Backup'].includes(shiftKey)) return true
+
+  // Rule 3: after Shift E → no very early starts
+  if (hadE && ['A', 'C'].includes(shiftKey)) return true
+
+  return false
+}
+
 /** Total scheduled hours for one employee from an assignments map. */
 export function calcEmployeeHours(employeeId, assignments) {
   let h = 0
@@ -132,12 +166,11 @@ export function fillEmptySlots(
 
       // Base eligibility
       const eligible = employees.filter(e => {
-        if (alreadyIn.has(e.id))      return false
-        if (workedOnDay[d].has(e.id)) return false
+        if (alreadyIn.has(e.id))                            return false
+        if (workedOnDay[d].has(e.id))                       return false
         if (IS_NIGHT(shift.key) && nights[e.id] >= nightTarget(e)) return false
-        // Backup: max 1 per employee per week
-        if (shift.key === 'Backup' && backupCount[e.id] >= 1) return false
-        // Backup is universal on-call — everyone can do it regardless of shift preference
+        if (shift.key === 'Backup' && backupCount[e.id] >= 1)      return false
+        if (violatesRest(e.id, d, shift.key, assignments))  return false  // rest period
         const wantShift = shift.key === 'Backup'
           ? true
           : (e.shifts.length === 0 || e.shifts.includes(shift.key))
@@ -165,8 +198,9 @@ export function fillEmptySlots(
       if (shift.key === 'E' && stillNeeded > 0) {
         const assigned = new Set(assignments[key] || [])
         const supplement = employees.filter(e => {
-          if (assigned.has(e.id))        return false
-          if (workedOnDay[d].has(e.id)) return false
+          if (assigned.has(e.id))                           return false
+          if (workedOnDay[d].has(e.id))                     return false
+          if (violatesRest(e.id, d, 'E', assignments))      return false
           const wantShift = e.shifts.length === 0 || e.shifts.includes('E')
           const wantDay   = e.days.length   === 0 || e.days.includes(d)
           return wantShift && wantDay && hours[e.id] + eh <= maxHours
@@ -194,13 +228,13 @@ export function fillEmptySlots(
         if (workedOnDay[d].has(emp.id))        continue
         if (!emp.days.includes(d) && emp.days.length > 0) continue
         if (hours[emp.id] + effectiveHours(shift.key) > maxHours) continue
+        if (violatesRest(emp.id, d, shift.key, assignments)) continue  // rest period
 
         const key     = `${d}-${shift.key}`
         const current = assignments[key] || []
         if (current.includes(emp.id)) continue
 
-        // Allow 1 extra beyond required to satisfy the night quota
-        if (current.length >= REQUIRED_STAFF(shift.key)) continue  // strict: no overfilling any slot
+        if (current.length >= REQUIRED_STAFF(shift.key)) continue
 
         assign(key, d, shift.key, emp)
       }
@@ -223,19 +257,20 @@ export function fillEmptySlots(
         if (workedOnDay[d].has(emp.id)) continue
 
         const eh = effectiveHours(shift.key)
-        if (eh === 0) continue                                   // 0h shift — skip
+        if (eh === 0) continue
         if (hours[emp.id] + eh > maxHours) continue
+        if (violatesRest(emp.id, d, shift.key, assignments)) continue  // rest period
 
         const wantShift = shift.key === 'Backup'
           ? true
           : (emp.shifts.length === 0 || emp.shifts.includes(shift.key))
-        const wantDay   = emp.days.length   === 0 || emp.days.includes(d)
+        const wantDay   = emp.days.length === 0 || emp.days.includes(d)
         if (!wantShift || !wantDay) continue
 
         const key     = `${d}-${shift.key}`
         const current = assignments[key] || []
         if (current.includes(emp.id)) continue
-        if (current.length >= REQUIRED_STAFF(shift.key)) continue  // strict: no overfilling any slot
+        if (current.length >= REQUIRED_STAFF(shift.key)) continue
 
         assign(key, d, shift.key, emp)
       }
