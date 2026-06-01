@@ -200,7 +200,7 @@ export function fillEmptySlots(
         if (current.includes(emp.id)) continue
 
         // Allow 1 extra beyond required to satisfy the night quota
-        if (current.length >= REQUIRED_STAFF(shift.key) + 1) continue
+        if (current.length >= REQUIRED_STAFF(shift.key)) continue  // strict: no overfilling any slot
 
         assign(key, d, shift.key, emp)
       }
@@ -235,7 +235,7 @@ export function fillEmptySlots(
         const key     = `${d}-${shift.key}`
         const current = assignments[key] || []
         if (current.includes(emp.id)) continue
-        if (current.length >= REQUIRED_STAFF(shift.key) + 1) continue
+        if (current.length >= REQUIRED_STAFF(shift.key)) continue  // strict: no overfilling any slot
 
         assign(key, d, shift.key, emp)
       }
