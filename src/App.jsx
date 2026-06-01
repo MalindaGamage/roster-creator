@@ -22,6 +22,7 @@ import AIPanel         from './components/AIPanel'
 import RulesModal      from './components/RulesModal'
 import SettingsModal   from './components/SettingsModal'
 import ChatImportModal from './components/ChatImportModal'
+import ReportPage      from './components/ReportPage'
 
 export default function App() {
   const { assignEmployee, employees, weekStart, numDays, setAssignments } = useRosterStore()
@@ -61,6 +62,7 @@ export default function App() {
     if (id === 'ai')        { setShowAI(true);                   return }
     if (id === 'employees') { setShowEmpPanel(v => !v);          return }
     if (id === 'roster')    { setShowEmpPanel(!isMobile);        return }
+    if (id === 'report')    { setShowEmpPanel(false);            return }
   }
 
   function handleAutoSchedule() {
@@ -154,15 +156,18 @@ export default function App() {
             )}
 
             <main
-              className="flex-1 overflow-auto"
+              className="flex-1 overflow-auto flex flex-col"
               style={{
                 background: '#0E0F11',
-                padding: isMobile ? '8px' : '16px',
-                paddingBottom: isMobile ? '72px' : '16px',  // space for mobile nav
+                padding: activeNav === 'report' ? 0 : isMobile ? '8px' : '16px',
+                paddingBottom: isMobile ? '72px' : (activeNav === 'report' ? 0 : '16px'),
               }}
             >
+              {/* Report page */}
+              {activeNav === 'report' && <ReportPage />}
+
               {/* Tap-to-assign banner */}
-              {selectedEmp && isMobile && (
+              {activeNav !== 'report' && selectedEmp && isMobile && (
                 <div
                   className="mb-2 px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-between"
                   style={{ background: '#00D9B520', border: '1px solid #00D9B540', color: '#00D9B5' }}
@@ -173,9 +178,11 @@ export default function App() {
                 </div>
               )}
 
-              <RosterGrid onCellTap={handleCellTap} isMobile={isMobile} flashCell={flashCell} />
+              {activeNav !== 'report' && (
+                <RosterGrid onCellTap={handleCellTap} isMobile={isMobile} flashCell={flashCell} />
+              )}
 
-              {!isMobile && (
+              {!isMobile && activeNav !== 'report' && (
                 <p className="text-center text-xs mt-3 pb-1" style={{ color: '#3A3D45' }}>
                   Drag employees onto cells · Click × to remove · Auto-Schedule fills all slots
                 </p>
