@@ -49,6 +49,7 @@ const useRosterStore = create(
               shifts: [],          // preferred shift keys e.g. ['A', 'C']
               days: [0, 1, 2, 3, 4, 5, 6],
               nightTarget: 2,      // required night shifts per week (B or E)
+              maxHoursOverride: null, // null = use global 45h cap; set e.g. 32 to cap lower
               notes: '',
               ...emp,
             },

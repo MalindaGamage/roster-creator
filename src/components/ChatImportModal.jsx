@@ -55,6 +55,10 @@ export default function ChatImportModal({ onClose }) {
       const current = emp.shifts.length ? emp.shifts : allShiftKeys
       updateEmployee(emp.id, { shifts: current.filter(s => !excluded.includes(s)) })
     }
+    for (const [name, hrs] of Object.entries(result?.hourLimits || {})) {
+      const emp = employees.find(e => e.name === name); if (!emp) continue
+      updateEmployee(emp.id, { maxHoursOverride: hrs })
+    }
   }
 
   function handleApply() {
@@ -86,8 +90,9 @@ export default function ChatImportModal({ onClose }) {
     setApplied(true); toast.success('Full roster filled!')
   }
 
-  const totalCells = Object.keys(result?.assignments || {}).length
-  const totalOff   = Object.values(result?.unavailable || {}).reduce((s, a) => s + a.length, 0)
+  const totalCells  = Object.keys(result?.assignments || {}).length
+  const totalOff    = Object.values(result?.unavailable || {}).reduce((s, a) => s + a.length, 0)
+  const totalLimits = Object.keys(result?.hourLimits || {}).length
 
   return (
     <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -141,11 +146,12 @@ export default function ChatImportModal({ onClose }) {
           {result && (
             <div className="space-y-4">
               {/* Stats */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {[
-                  { v: totalCells, label: 'Cells filled' },
-                  { v: totalOff,   label: 'Days off'     },
+                  { v: totalCells,  label: 'Cells filled' },
+                  { v: totalOff,    label: 'Days off'      },
                   { v: Object.keys(result.noShift).length, label: 'Exclusions' },
+                  { v: totalLimits, label: 'Hour limits'   },
                 ].map(({ v, label }) => (
                   <div key={label} className="rounded-lg text-center py-2.5" style={{ background: '#1C1E22', border: '0.5px solid #2A2D33' }}>
                     <p className="text-base font-semibold" style={{ color: '#00D9B5' }}>{v}</p>
@@ -204,6 +210,23 @@ export default function ChatImportModal({ onClose }) {
                             </span>
                           ))}
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              )}
+
+              {/* Hour limits */}
+              {totalLimits > 0 && (
+                <Section title="Hour Limits">
+                  <div className="space-y-1.5">
+                    {Object.entries(result.hourLimits).map(([name, hrs]) => (
+                      <div key={name} className="flex items-center gap-2 flex-wrap px-3 py-2 rounded-lg"
+                        style={{ background: '#1C1E22', border: '0.5px solid #2A2D33' }}>
+                        <span className="text-xs font-medium w-24 flex-shrink-0" style={{ color: '#F0EEE9' }}>{name}</span>
+                        <span className="text-xs" style={{ color: '#5A5D65' }}>max</span>
+                        <span className="text-sm font-bold" style={{ color: '#00D9B5' }}>{hrs}h</span>
+                        <span className="text-xs" style={{ color: '#5A5D65' }}>this week</span>
                       </div>
                     ))}
                   </div>
@@ -273,6 +296,13 @@ function extractEntries(text, employees) {
     if (!emp) continue
     const body = line.replace(new RegExp('\\b' + escRE(emp.name) + '\\b', 'i'), '').replace(/^[\s\-:,]+/, '').trim()
     if (/no\s+onsite\s+night/i.test(body)) entries.push({ person: emp.name, action: 'no_shift', days: null, shift: 'B' })
+
+    // Hour limit: "max 32 hours" / "limit 32h" / "maximum 32 hours" / "only 32h"
+    const hourRe = /(?:max(?:imum)?|limit(?:ed?\s+to)?|only|cap(?:ped\s+at)?|no\s+more\s+than)\s+(\d+)\s*(?:hours?|h\b)/gi
+    for (const [, hStr] of body.matchAll(hourRe)) {
+      const hrs = parseInt(hStr)
+      if (hrs >= 8 && hrs <= 45) entries.push({ person: emp.name, action: 'max_hours', hours: hrs, days: null, shift: null })
+    }
     for (const [, ds] of body.matchAll(/(?:need\s+to\s+)?free\s+(?:on\s+)?((?:\d{1,2}(?:st|nd|rd|th)?[\s,&]*(?:and\s+)?)+)/gi)) {
       const d = parseDays(ds); if (d.length) entries.push({ person: emp.name, action: 'free', days: d, shift: null })
     }
@@ -293,6 +323,7 @@ function extractEntries(text, employees) {
 function buildResult(entries, employees, resolveDay) {
   const assignments = {}, unavailable = {}, noShift = {}, warnings = []
   const nm = Object.fromEntries(employees.map(e => [e.name.toLowerCase().trim(), e.name]))
+  const hourLimits = {}
   for (const e of entries) {
     const name = nm[e.person.toLowerCase().trim()]; if (!name) continue
     if (e.action === 'assign') {
@@ -307,9 +338,11 @@ function buildResult(entries, employees, resolveDay) {
       }
     } else if (e.action === 'no_shift') {
       noShift[name] = [...new Set([...(noShift[name] || []), e.shift])]
+    } else if (e.action === 'max_hours') {
+      hourLimits[name] = e.hours
     }
   }
-  return { assignments, unavailable, noShift, warnings }
+  return { assignments, unavailable, noShift, hourLimits, warnings }
 }
 
 const parseDays = str => [...new Set((str.match(/\b(\d{1,2})(?:st|nd|rd|th)?\b/g) || []).map(m => m.replace(/\D/g, '')))]

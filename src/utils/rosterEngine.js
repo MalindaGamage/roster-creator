@@ -170,12 +170,13 @@ export function fillEmptySlots(
         if (workedOnDay[d].has(e.id))                       return false
         if (IS_NIGHT(shift.key) && nights[e.id] >= nightTarget(e)) return false
         if (shift.key === 'Backup' && backupCount[e.id] >= 1)      return false
-        if (violatesRest(e.id, d, shift.key, assignments))  return false  // rest period
+        if (violatesRest(e.id, d, shift.key, assignments))  return false
         const wantShift = shift.key === 'Backup'
           ? true
           : (e.shifts.length === 0 || e.shifts.includes(shift.key))
         const wantDay   = e.days.length === 0 || e.days.includes(d)
-        return wantShift && wantDay && hours[e.id] + eh <= maxHours
+        const empMax    = e.maxHoursOverride ?? maxHours     // per-employee cap
+        return wantShift && wantDay && hours[e.id] + eh <= empMax
       })
 
       // For Backup: sort MOST hours first so well-covered employees take on-call duty,
@@ -203,7 +204,8 @@ export function fillEmptySlots(
           if (violatesRest(e.id, d, 'E', assignments))      return false
           const wantShift = e.shifts.length === 0 || e.shifts.includes('E')
           const wantDay   = e.days.length   === 0 || e.days.includes(d)
-          return wantShift && wantDay && hours[e.id] + eh <= maxHours
+          const empMax    = e.maxHoursOverride ?? maxHours
+          return wantShift && wantDay && hours[e.id] + eh <= empMax
         })
         // Sort: fewest extra nights first (least disruption to targets)
         supplement.sort((a, b) => nights[a.id] - nights[b.id] || hours[a.id] - hours[b.id])
@@ -227,13 +229,13 @@ export function fillEmptySlots(
         if (nights[emp.id] >= target) break
         if (workedOnDay[d].has(emp.id))        continue
         if (!emp.days.includes(d) && emp.days.length > 0) continue
-        if (hours[emp.id] + effectiveHours(shift.key) > maxHours) continue
-        if (violatesRest(emp.id, d, shift.key, assignments)) continue  // rest period
+        const empMax = emp.maxHoursOverride ?? maxHours
+        if (hours[emp.id] + effectiveHours(shift.key) > empMax) continue
+        if (violatesRest(emp.id, d, shift.key, assignments)) continue
 
         const key     = `${d}-${shift.key}`
         const current = assignments[key] || []
         if (current.includes(emp.id)) continue
-
         if (current.length >= REQUIRED_STAFF(shift.key)) continue
 
         assign(key, d, shift.key, emp)
@@ -258,7 +260,8 @@ export function fillEmptySlots(
 
         const eh = effectiveHours(shift.key)
         if (eh === 0) continue
-        if (hours[emp.id] + eh > maxHours) continue
+        const empMax2 = emp.maxHoursOverride ?? maxHours
+        if (hours[emp.id] + eh > empMax2) continue
         if (violatesRest(emp.id, d, shift.key, assignments)) continue  // rest period
 
         const wantShift = shift.key === 'Backup'

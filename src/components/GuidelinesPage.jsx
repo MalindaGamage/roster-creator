@@ -322,17 +322,19 @@ export default function GuidelinesPage() {
               ))}
             </div>
             {[
-              'Haribabuji - 3rd & 7th shift E, 5th - shiftD, 6th -shift C',
-              'Shihara onsite night shifts on 5th and 6th',
-              'Lakshitha - Need to free 1st and 3rd',
-              'Ravishka - Need onsite night shift on 4th and free on 7th',
-              'Uminda - need to free on 7th, No Onsite night shifts',
-              'Other 6 employees: available for any shift',
-            ].map((line, i) => (
+              ['Haribabuji - 3rd & 7th shift E, 5th - shiftD, 6th -shift C', false],
+              ['Shihara onsite night shifts on 5th and 6th',                   false],
+              ['Lakshitha - Need to free 1st and 3rd',                         false],
+              ['Ravishka - Need onsite night shift on 4th and free on 7th',    false],
+              ['Uminda - need to free on 7th, No Onsite night shifts',         false],
+              ['Lahiru - max 32 hours this week',                               false],
+              ['Nikeshala - limit 32h',                                         false],
+              ['Other 6 employees: available for any shift',                    true],
+            ].map(([line, muted], i) => (
               <div key={i} style={{
                 fontFamily: 'monospace',
                 fontSize: 12.5,
-                color: i === 5 ? C.muted : C.text,
+                color: muted ? C.muted : C.text,
                 lineHeight: 1.9,
                 whiteSpace: 'nowrap',
               }}>
@@ -345,15 +347,26 @@ export default function GuidelinesPage() {
           <Table
             headers={['Pattern', 'Example', 'Description']}
             rows={[
-              ['Specific shift on date', 'shift E on 5th', 'Assigns named shift on that day'],
-              ['Shorthand shift code', '5th - shiftD', 'Shift key D, E, A, B, C, or Backup'],
+              ['Specific shift on date', '5th - shiftD', 'Assigns that shift key on that day'],
+              ['Shorthand shift code', '3rd & 7th shift E', 'Same shift across multiple days'],
               ['Onsite night', 'onsite night shift on 4th', 'Maps to Shift B (5PM–8AM)'],
               ['Free day', 'Need to free 1st and 3rd', 'Employee unavailable those days'],
-              ['No night shifts', 'No Onsite night shifts', 'Excludes Shift B for the week'],
-              ['Multiple dates', '3rd & 7th shift E', 'Same shift across multiple days'],
-              ['Any shift', 'available for any shift', 'No constraints — fill as needed'],
+              ['No night shifts', 'No Onsite night shifts', 'Excludes Shift B for this week'],
+              ['Hour cap', 'max 32 hours this week', 'Limits employee to 32h max this week'],
+              ['Hour cap (short)', 'limit 32h', 'Same — also works: "only 32h", "maximum 32 hours"'],
+              ['Any shift', 'available for any shift', 'No constraints — auto-schedule freely'],
             ]}
           />
+          <div style={{
+            marginTop: 14, padding: '10px 14px',
+            background: C.accent + '0D', border: `0.5px solid ${C.accent}30`,
+            borderRadius: 8, fontSize: 13, color: C.muted, lineHeight: 1.6,
+          }}>
+            <strong style={{ color: C.accent }}>Hour cap tip:</strong> Setting an employee's max to 32h means the
+            auto-scheduler stops assigning once they hit 32h. Their minimum is still 32h, so the
+            scheduler targets exactly 32h for that person. The limit persists in their employee record
+            until you edit it manually.
+          </div>
         </Card>
 
         {/* ── Section 4: Shift Reference ───────────────── */}
